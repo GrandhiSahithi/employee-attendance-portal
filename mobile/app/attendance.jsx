@@ -19,7 +19,11 @@ function gps(latitude, longitude) {
 }
 
 export default function AttendanceScreen() {
-  return <RequireAuth roles={['EMPLOYEE']}><Attendance /></RequireAuth>;
+  return (
+    <RequireAuth roles={['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER']}>
+      <Attendance />
+    </RequireAuth>
+  );
 }
 
 function Attendance() {

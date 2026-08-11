@@ -7,7 +7,12 @@ import { currentDateOnly, dateOnlyFromCapturedAt, parseDateOnly, subtractDays } 
 import { attendanceDto } from '../utils/serializers.js';
 
 const router = Router();
-router.use(requireAuth, requireRoles('EMPLOYEE'));
+
+router.use(
+      requireAuth,
+      requireRoles('EMPLOYEE', 'MANAGER', 'HEAD_MANAGER')
+ );
+
 
 const markSchema = z.object({
   latitude: z.number().min(-90).max(90),

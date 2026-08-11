@@ -22,7 +22,7 @@ function coordinate(latitude, longitude) {
 }
 
 export default function HistoryScreen() {
-  return <RequireAuth roles={['EMPLOYEE']}><History /></RequireAuth>;
+  return <RequireAuth roles={['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER']}><History /></RequireAuth>;
 }
 
 function History() {
