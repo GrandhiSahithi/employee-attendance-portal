@@ -150,9 +150,6 @@ router.post('/signup', async (req, res) => {
       });
     }
 
-    if (signupOtpRecord) {
-      await prisma.otpCode.update({ where: { id: signupOtpRecord.id }, data: { usedAt: new Date() } });
-    }
     res.status(201).json({ message: 'Account created successfully.', token: issueToken(user), user: publicUser(user) });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
