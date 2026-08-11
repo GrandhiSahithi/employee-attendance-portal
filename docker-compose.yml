@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: employee_user
+      POSTGRES_PASSWORD: employee_password
+      POSTGRES_DB: employee_portal
+    ports:
+      - "5432:5432"
+    volumes:
+      - employee_portal_pgdata:/var/lib/postgresql/data
+
+volumes:
+  employee_portal_pgdata:

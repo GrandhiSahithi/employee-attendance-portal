@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  HEAD_MANAGER
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  VACATION
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OtpPurpose {
+  SIGNUP
+  PASSWORD_RESET
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  teams     Team[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id           String     @id @default(cuid())
+  name         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  users        User[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([departmentId, name])
+  @@index([departmentId])
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  employeeId         String   @unique
+  name               String
+  email              String   @unique
+  emailVerified      Boolean  @default(false)
+  passwordHash       String
+  phone              String?
+  profilePicture     String?
+  role               Role     @default(EMPLOYEE)
+  jobTitle           String?
+  availableLeaveDays Int      @default(20)
+  isActive           Boolean  @default(true)
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  teamId String?
+  team   Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  supervisorId  String?
+  supervisor    User?  @relation("SupervisorReports", fields: [supervisorId], references: [id], onDelete: SetNull)
+  directReports User[] @relation("SupervisorReports")
+
+  attendances    Attendance[]
+  leaveRequests  LeaveRequest[] @relation("LeaveOwner")
+  reviewedLeaves LeaveRequest[] @relation("LeaveReviewer")
+  notifications Notification[]  @relation("NotificationRecipient")
+  auditActions   AuditLog[]      @relation("AuditActor")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([supervisorId])
+  @@index([departmentId])
+  @@index([teamId])
+  @@index([role])
+  @@index([isActive])
+}
+
+model Attendance {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workDate         DateTime @db.Date
+  checkInTime      DateTime
+  checkOutTime     DateTime?
+  checkInLatitude  Float
+  checkInLongitude Float
+  checkOutLatitude Float?
+  checkOutLongitude Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, workDate])
+  @@index([userId, workDate])
+}
+
+model LeaveRequest {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation("LeaveOwner", fields: [userId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType
+  fromDate     DateTime     @db.Date
+  toDate       DateTime     @db.Date
+  reason       String
+  days         Int
+  status       LeaveStatus  @default(PENDING)
+  reviewedById String?
+  reviewedBy   User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  title       String
+  message     String
+  type        String   @default("INFO")
+  entityId    String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([recipientId, isRead, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String
+  targetId   String?
+  details    String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+}
+
+model OtpCode {
+  id        String     @id @default(cuid())
+  email     String
+  purpose   OtpPurpose
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  @@index([email, purpose, createdAt])
+  @@index([expiresAt])
+}

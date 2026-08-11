@@ -1,0 +1,13 @@
+{
+  "name": "employee-attendance-portal",
+  "private": true,
+  "workspaces": [
+    "mobile",
+    "server"
+  ],
+  "scripts": {
+    "mobile": "npm --workspace mobile run start",
+    "web": "npm --workspace mobile run web",
+    "server": "npm --workspace server run dev"
+  }
+}

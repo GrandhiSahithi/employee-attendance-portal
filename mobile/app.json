@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Employee Portal",
+    "slug": "employee-attendance-portal",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "employeeportal",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Employee Portal to capture your location when checking in or out."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Employee Portal to choose a profile picture."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

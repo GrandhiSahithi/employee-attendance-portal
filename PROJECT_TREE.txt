@@ -1,0 +1,78 @@
+employee-attendance-portal
+├── mobile
+│   ├── app
+│   │   ├── _layout.jsx
+│   │   ├── admin.jsx
+│   │   ├── attendance.jsx
+│   │   ├── dashboard.jsx
+│   │   ├── forgot-password.jsx
+│   │   ├── history.jsx
+│   │   ├── index.jsx
+│   │   ├── leave.jsx
+│   │   ├── login.jsx
+│   │   ├── management.jsx
+│   │   ├── notifications.jsx
+│   │   ├── profile.jsx
+│   │   ├── setup.jsx
+│   │   └── signup.jsx
+│   ├── src
+│   │   ├── components
+│   │   │   ├── AppButton.jsx
+│   │   │   ├── DatePickerField.jsx
+│   │   │   ├── FormField.jsx
+│   │   │   ├── LoadingView.jsx
+│   │   │   ├── MessageBox.jsx
+│   │   │   ├── PageHeader.jsx
+│   │   │   ├── RequireAuth.jsx
+│   │   │   └── Screen.jsx
+│   │   ├── context
+│   │   │   ├── AuthContext.jsx
+│   │   │   └── ThemeContext.jsx
+│   │   └── services
+│   │       ├── api.js
+│   │       └── offlineAttendance.js
+│   ├── .env.example
+│   ├── app.json
+│   ├── eas.json
+│   └── package.json
+├── server
+│   ├── prisma
+│   │   ├── schema.prisma
+│   │   └── seed.js
+│   ├── src
+│   │   ├── middleware
+│   │   │   ├── auth.js
+│   │   │   ├── error.js
+│   │   │   └── upload.js
+│   │   ├── routes
+│   │   │   ├── assist.routes.js
+│   │   │   ├── attendance.routes.js
+│   │   │   ├── auth.routes.js
+│   │   │   ├── dashboard.routes.js
+│   │   │   ├── leave.routes.js
+│   │   │   ├── management.routes.js
+│   │   │   ├── notifications.routes.js
+│   │   │   ├── organization.routes.js
+│   │   │   └── profile.routes.js
+│   │   ├── utils
+│   │   │   ├── date.js
+│   │   │   ├── email.js
+│   │   │   ├── otp.js
+│   │   │   └── serializers.js
+│   │   ├── db.js
+│   │   └── index.js
+│   ├── uploads
+│   │   └── .gitkeep
+│   ├── .env.example
+│   └── package.json
+├── .gitignore
+├── API_REFERENCE.md
+├── docker-compose.yml
+├── GIT_COMMITS.md
+├── netlify.toml
+├── package.json
+├── PROJECT_GUIDE.md
+├── PROJECT_TREE.txt
+├── README.md
+├── REQUIREMENTS_CHECKLIST.md
+└── RUN_PROJECT.md
