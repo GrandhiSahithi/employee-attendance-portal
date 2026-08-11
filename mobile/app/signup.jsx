@@ -13,7 +13,7 @@ import { api, getApiError } from '../src/services/api';
 
 const EMPTY = {
   name: '', employeeId: '', email: '', password: 'password-123', phone: '', role: 'EMPLOYEE',
-  jobTitle: '', departmentId: '', teamId: '', supervisorId: '', departmentName: '', teamName: '', otp: '',
+  jobTitle: '', departmentId: '', teamId: '', supervisorId: '', departmentName: '', teamName: '',
 };
 
 function domainType(email) {
@@ -32,8 +32,6 @@ export default function Signup() {
   const [options, setOptions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [sendingOtp, setSendingOtp] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -61,30 +59,13 @@ export default function Signup() {
   const emailType = domainType(form.email);
 
   const changeEmail = (value) => {
-    setForm((current) => ({ ...current, email: value.toLowerCase(), otp: '' }));
-    setOtpSent(false);
+    setForm((current) => ({ ...current, email: value.toLowerCase() }));
     setMessage('');
-  };
-
-  const requestOtp = async () => {
-    setError(''); setMessage('');
-    if (emailType !== 'GMAIL') return setError('Enter a valid @gmail.com address first.');
-    setSendingOtp(true);
-    try {
-      const { data } = await api.post('/auth/signup/request-otp', { email: form.email.trim().toLowerCase() });
-      setOtpSent(true);
-      setMessage(data.message);
-    } catch (e) {
-      setError(await getApiError(e));
-    } finally {
-      setSendingOtp(false);
-    }
   };
 
   const submit = async () => {
     setError(''); setMessage('');
     if (emailType === 'OTHER') return setError('Use either a @dev.com company email or a @gmail.com email.');
-    if (emailType === 'GMAIL' && !/^\d{6}$/.test(form.otp)) return setError('Send the Gmail verification code and enter all 6 digits.');
     if (form.password.length < 8) return setError('Password must contain at least 8 characters.');
     if (!form.name.trim() || !form.employeeId.trim() || !form.jobTitle.trim()) return setError('Name, employee ID, and job title are required.');
 
@@ -134,8 +115,8 @@ export default function Signup() {
               : 'Create an Employee, Manager, or Head Manager profile. The account is saved directly in PostgreSQL.'}
           </Text>
           <View style={[styles.note, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={{ color: colors.text, fontWeight: '900' }}>Email verification</Text>
-            <Text style={{ color: colors.muted, lineHeight: 20, marginTop: 5 }}>@dev.com is the internal demo domain. @gmail.com requires a one-time code sent to the actual mailbox. If the user cannot receive that code, the Gmail account cannot be created.</Text>
+            <Text style={{ color: colors.text, fontWeight: '900' }}>Email accounts</Text>
+            <Text style={{ color: colors.muted, lineHeight: 20, marginTop: 5 }}>You can create an account using either @dev.com or @gmail.com. Gmail OTP is only used later for Forgot Password recovery.</Text>
           </View>
         </View>
 
@@ -150,18 +131,7 @@ export default function Signup() {
 
           <FormField label="Email" value={form.email} onChangeText={changeEmail} autoCapitalize="none" keyboardType="email-address" placeholder="name@dev.com or name@gmail.com" />
 
-          {emailType === 'GMAIL' && (
-            <View style={[styles.otpBox, { backgroundColor: colors.roseSoft, borderColor: colors.border }]}>
-              <View style={styles.otpHeading}>
-                <Ionicons name="mail-unread-outline" size={20} color={colors.rose} />
-                <Text style={{ color: colors.text, fontWeight: '900' }}>Gmail verification required</Text>
-              </View>
-              <AppButton title={otpSent ? 'Send New OTP' : 'Send Gmail OTP'} variant="secondary" loading={sendingOtp} onPress={requestOtp} />
-              <FormField label="6-Digit OTP" value={form.otp} onChangeText={(value) => update('otp', value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" placeholder="123456" />
-            </View>
-          )}
-
-          <FormField label="Password" value={form.password} onChangeText={(value) => update('password', value)} secureTextEntry placeholder="Minimum 8 characters" />
+          <FormField label="Password"alue={form.password} onChangeText={(value) => update('password', value)} secureTextEntry placeholder="Minimum 8 characters" />
           <View style={styles.two}>
             <FormField style={styles.field} label="Phone" value={form.phone} onChangeText={(value) => update('phone', value)} keyboardType="phone-pad" placeholder="Optional" />
             <FormField style={styles.field} label="Job Title" value={form.jobTitle} onChangeText={(value) => update('jobTitle', value)} placeholder="Software Engineer" />

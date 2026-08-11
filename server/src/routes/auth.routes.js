@@ -50,22 +50,6 @@ router.get('/signup-options', async (_req, res) => {
 
 const otpEmailSchema = z.object({ email: z.string().email() });
 
-router.post('/signup/request-otp', async (req, res) => {
-  const parsed = otpEmailSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: 'Enter a valid Gmail address.' });
-  const email = normalizeEmail(parsed.data.email);
-  if (!isGmailEmail(email)) return res.status(400).json({ message: 'OTP verification is only required for @gmail.com signup.' });
-  if (await prisma.user.findUnique({ where: { email } })) return res.status(409).json({ message: 'An account already exists with this email.' });
-
-  try {
-    const { expiresAt } = await issueOtp(email, 'SIGNUP');
-    res.json({ message: 'Verification code sent to your Gmail address.', expiresAt });
-  } catch (error) {
-    if (error.code === 'EMAIL_NOT_CONFIGURED') return res.status(503).json({ message: error.message });
-    throw error;
-  }
-});
-
 const publicSignupSchema = z.object({
   name: z.string().trim().min(2).max(100),
   employeeId: z.string().trim().min(2).max(40),
@@ -79,7 +63,6 @@ const publicSignupSchema = z.object({
   supervisorId: z.string().optional().nullable(),
   departmentName: z.string().trim().min(2).max(80).optional().nullable(),
   teamName: z.string().trim().min(2).max(80).optional().nullable(),
-  otp: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d{6}$/).optional().nullable()),
 });
 
 router.post('/signup', async (req, res) => {
@@ -91,14 +74,6 @@ router.post('/signup', async (req, res) => {
 
   const duplicate = await prisma.user.findFirst({ where: { OR: [{ email }, { employeeId: data.employeeId.trim() }] } });
   if (duplicate) return res.status(409).json({ message: 'That email or employee ID is already registered. Use a unique value.' });
-
-  let signupOtpRecord = null;
-  if (isGmailEmail(email)) {
-    if (!data.otp) return res.status(400).json({ message: 'Enter the 6-digit code sent to your Gmail address.' });
-    const verified = await verifyOtp(email, 'SIGNUP', data.otp, { consume: false });
-    if (!verified.ok) return res.status(400).json({ message: verified.message });
-    signupOtpRecord = verified.record;
-  }
 
   const userCount = await prisma.user.count();
   try {
@@ -170,7 +145,7 @@ router.post('/signup', async (req, res) => {
           action: 'SELF_SIGNUP',
           targetType: 'User',
           targetId: user.id,
-          details: `${user.name} created a ${user.role} account using ${isDevEmail(email) ? 'company' : 'verified Gmail'} email`,
+          details: `${user.name} created a ${user.role} account using ${isDevEmail(email) ? 'company' : 'Gmail'} email`,
         },
       });
     }
@@ -223,7 +198,6 @@ const resetPasswordSchema = z.object({
   email: z.string().email(),
   newPassword: z.string().min(8),
   employeeId: z.string().trim().optional().nullable(),
-  otp: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d{6}$/).optional().nullable()),
 });
 
 router.post('/forgot-password/reset', async (req, res) => {
