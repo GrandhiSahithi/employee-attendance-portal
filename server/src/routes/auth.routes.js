@@ -61,8 +61,8 @@ const publicSignupSchema = z.object({
   departmentId: z.string().optional().nullable(),
   teamId: z.string().optional().nullable(),
   supervisorId: z.string().optional().nullable(),
-  departmentName: z.string().trim().min(2).max(80).optional().nullable(),
-  teamName: z.string().trim().min(2).max(80).optional().nullable(),
+  departmentName: z.preprocess((value) => value === "" ? undefined : value, z.string().trim().min(2).max(80).optional().nullable()),
+  teamName: z.preprocess((value) => value === "" ? undefined : value, z.string().trim().min(2).max(80).optional().nullable()),
 });
 
 router.post('/signup', async (req, res) => {
