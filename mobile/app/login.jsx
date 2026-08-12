@@ -1,3 +1,16 @@
+/**
+ * Login Screen Component
+ * =====================
+ * This is the main login page for the Employee Attendance Portal mobile app.
+ * Users can sign in with their email and password (minimum 8 characters).
+ * Features:
+ * - Email validation (@dev.com or Gmail)
+ * - Password validation (minimum 8 characters)
+ * - Theme toggle (Light/Dark mode)
+ * - Link to sign up and forgot password screens
+ * - Responsive design for mobile and tablet
+ */
+
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,25 +23,43 @@ import { useAuth } from '../src/context/AuthContext';
 import { useTheme } from '../src/context/ThemeContext';
 import { getApiError } from '../src/services/api';
 
+/**
+ * Login Component
+ * Main login form component that handles user authentication
+ */
 export default function Login() {
+  // Get authentication context to call login API
   const { login } = useAuth();
+  // Get theme colors and toggle function
   const { colors, mode, toggleTheme } = useTheme();
+  // Get window width to determine responsive layout (wide = 880px or more)
   const { width } = useWindowDimensions();
   const wide = width >= 880;
+  
+  // State management for form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Submit handler for login form
+   * Validates email and password, then calls login API
+   */
   const submit = async () => {
     setError('');
+    // Email validation using regex pattern
     if (!/^\S+@\S+\.\S+$/.test(email)) return setError('Enter a valid email address.');
+    // Password must be at least 8 characters
     if (password.length < 8) return setError('Password must contain at least 8 characters.');
     setLoading(true);
     try {
+      // Call login API with trimmed and lowercased email
       await login(email.trim().toLowerCase(), password);
+      // Navigate to dashboard on successful login
       router.replace('/dashboard');
     } catch (e) {
+      // Display error message from API or fallback
       setError(await getApiError(e, 'Unable to sign in.'));
     } finally {
       setLoading(false);
@@ -94,25 +125,69 @@ export default function Login() {
   );
 }
 
+/**
+ * StyleSheet Definitions for Login Screen
+ * ========================================
+ * This defines all the styles used in the login page with explanations:
+ */
 const styles = StyleSheet.create({
+  // Main page container - centered, max width 1240, responsive
   page: { maxWidth: 1240, width: '100%', alignSelf: 'center' },
+  
+  // Top section - brand logo and theme toggle button
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 24 },
+  
+  // Brand section - logo icon and text
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  
+  // Logo circle - 52x52, displays the app icon (people)
   logo: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  
+  // Brand title text - "Dev Employee Portal"
   brandTitle: { fontSize: 20, fontWeight: '900' },
+  
+  // Theme toggle button - shows "Light/Dark mode" with icon
   theme: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  
+  // Main layout container
   layout: { gap: 20 },
+  
+  // Wide layout (desktop) - displays hero and card side by side
   wide: { flexDirection: 'row', alignItems: 'stretch' },
+  
+  // Hero section - shows features (left side on desktop)
   hero: { flex: 1.2, borderWidth: 1, borderRadius: 26, padding: 30, justifyContent: 'center' },
+  
+  // Small text label for features
   eyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.4 },
+  
+  // Main heading text - "One elegant portal for the entire workday."
   heroTitle: { fontSize: 38, lineHeight: 46, fontWeight: '900', marginTop: 12, maxWidth: 600 },
+  
+  // Description text under hero title
   heroText: { fontSize: 15, lineHeight: 24, marginTop: 12, maxWidth: 600 },
+  
+  // Grid of feature tiles (GPS, Leave, Team Hierarchy, Secure Accounts)
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 11, marginTop: 24 },
+  
+  // Individual feature tile - 47% width with icon and label
   tile: { width: '47%', minWidth: 180, borderWidth: 1, borderRadius: 16, padding: 14, gap: 9 },
+  
+  // Icon container inside each tile - colored background
   tileIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  
+  // Login card (right side) - contains email/password form
   card: { flex: 0.8, borderWidth: 1, borderRadius: 26, padding: 24, gap: 15, justifyContent: 'center' },
+  
+  // Icon above "Welcome back" text
   loginIcon: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  
+  // Card heading - "Welcome back"
   cardTitle: { fontSize: 28, fontWeight: '900' },
+  
+  // "Forgot Password?" link button
   forgot: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
+  
+  // Horizontal divider line between Sign In and Sign Up buttons
   divider: { height: 1, marginVertical: 2 },
 });

@@ -1,3 +1,16 @@
+/**
+ * Data Serializers / DTOs
+ * =======================
+ * Transform database objects into safe API response formats
+ * Excludes sensitive fields and formats data for client consumption
+ */
+
+/**
+ * Transform user object for public API responses
+ * Removes sensitive data like password hashes, includes related data
+ * @param {object} user - User object from database
+ * @returns {object} Public user DTO with safe fields only
+ */
 export function publicUser(user) {
   if (!user) return null;
   return {
@@ -22,15 +35,29 @@ export function publicUser(user) {
   };
 }
 
+/**
+ * Transform attendance record for API responses
+ * Calculates working hours from check-in/check-out times
+ * @param {object} record - Attendance record from database
+ * @returns {object} Attendance DTO with calculated working hours
+ */
 export function attendanceDto(record) {
   if (!record) return null;
+  // Calculate total minutes worked
   const totalWorkingMinutes = record.checkOutTime
     ? Math.max(0, Math.round((new Date(record.checkOutTime) - new Date(record.checkInTime)) / 60000))
     : null;
+  // Format as human-readable hours and minutes
   const totalWorkingHours = totalWorkingMinutes == null ? null : `${Math.floor(totalWorkingMinutes / 60)}h ${totalWorkingMinutes % 60}m`;
   return { ...record, totalWorkingMinutes, totalWorkingHours };
 }
 
+/**
+ * Transform leave request for API responses
+ * Includes employee name, reviewer name, and status
+ * @param {object} request - Leave request from database
+ * @returns {object} Leave request DTO with formatted data
+ */
 export function leaveDto(request) {
   if (!request) return null;
   return {
