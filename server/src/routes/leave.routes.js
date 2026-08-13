@@ -120,9 +120,15 @@ router.get('/me', async (req, res) => {
  * only (not company-wide), so anyone can see who else is out before
  * requesting their own dates. Defaults to a 2-month forward-looking window
  * (current month + next) since that's what's useful for planning ahead.
+ *
+ * A Head Manager isn't a working member of any single team the way an
+ * Employee or Manager is, so "their team" would otherwise mean just the
+ * one-person team created alongside their account. For a Head Manager this
+ * scope is broadened to everyone in the organization instead.
  */
 router.get('/team-calendar', async (req, res) => {
-  if (!req.user.teamId) {
+  const isHead = req.user.role === 'HEAD_MANAGER';
+  if (!isHead && !req.user.teamId) {
     return res.json({ requests: [], message: 'You are not assigned to a team yet.' });
   }
 
@@ -141,15 +147,21 @@ router.get('/team-calendar', async (req, res) => {
   const requests = await prisma.leaveRequest.findMany({
     where: {
       status: { in: ['PENDING', 'APPROVED'] },
-      user: { teamId: req.user.teamId, isActive: true },
+      user: isHead ? { isActive: true, id: { not: req.user.id } } : { teamId: req.user.teamId, isActive: true },
       fromDate: { lte: to },
       toDate: { gte: from },
     },
-    include: { user: true },
+    include: { user: { include: { team: true } } },
     orderBy: { fromDate: 'asc' },
   });
 
-  res.json({ requests: requests.map(leaveDto), from, to, teamName: req.user.team?.name || null });
+  res.json({
+    requests: requests.map(leaveDto),
+    from,
+    to,
+    teamName: isHead ? 'the organization' : req.user.team?.name || null,
+    scope: isHead ? 'ORG' : 'TEAM',
+  });
 });
 
 export default router;

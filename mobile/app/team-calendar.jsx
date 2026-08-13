@@ -28,6 +28,7 @@ function TeamCalendar() {
   const [month, setMonth] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
   const [requests, setRequests] = useState([]);
   const [teamName, setTeamName] = useState(null);
+  const [scope, setScope] = useState('TEAM');
   const [selectedDate, setSelectedDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,6 +43,7 @@ function TeamCalendar() {
       const { data } = await api.get('/leaves/team-calendar', { params: { from, to } });
       setRequests(data.requests || []);
       setTeamName(data.teamName || null);
+      setScope(data.scope || 'TEAM');
       setMessage(data.message || '');
     } catch (e) {
       setError(await getApiError(e));
@@ -71,8 +73,10 @@ function TeamCalendar() {
   return (
     <Screen contentStyle={styles.page}>
       <PageHeader
-        title="Team Leave Calendar"
-        subtitle={teamName ? `Who's out on ${teamName} — check before requesting your own dates.` : 'Who else on your team is out before requesting your own dates.'}
+        title={scope === 'ORG' ? 'Organization Leave Calendar' : 'Team Leave Calendar'}
+        subtitle={scope === 'ORG'
+          ? "Who's out across every team in the organization."
+          : teamName ? `Who's out on ${teamName} — check before requesting your own dates.` : 'Who else on your team is out before requesting your own dates.'}
       />
       {!!error && <MessageBox type="danger">{error}</MessageBox>}
       {!!message && <MessageBox type="info">{message}</MessageBox>}
@@ -117,12 +121,12 @@ function TeamCalendar() {
               <View style={[styles.detail, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                 <Text style={{ color: colors.text, fontWeight: '900', marginBottom: 6 }}>{selectedDate}</Text>
                 {selectedEntries.length === 0 ? (
-                  <Text style={{ color: colors.muted }}>No one on your team is out this day.</Text>
+                  <Text style={{ color: colors.muted }}>{scope === 'ORG' ? 'No one is out this day.' : 'No one on your team is out this day.'}</Text>
                 ) : selectedEntries.map((entry) => (
                   <View key={entry.id} style={styles.detailRow}>
                     <Ionicons name={entry.status === 'PENDING' ? 'time-outline' : 'checkmark-circle-outline'} size={16} color={entry.status === 'PENDING' ? colors.gold : colors.primary} />
                     <Text style={{ color: colors.text, flex: 1 }}>
-                      {entry.employeeName} · {entry.leaveType} {entry.status === 'PENDING' ? '(pending)' : ''}
+                      {entry.employeeName}{scope === 'ORG' && entry.team ? ` (${entry.team})` : ''} · {entry.leaveType} {entry.status === 'PENDING' ? '(pending)' : ''}
                     </Text>
                   </View>
                 ))}

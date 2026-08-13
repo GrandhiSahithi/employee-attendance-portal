@@ -70,6 +70,7 @@ export function leaveDto(request) {
     userId: request.userId,
     employeeName: request.user?.name || null,
     employeeId: request.user?.employeeId || null,
+    team: request.user?.team?.name || null,
     leaveType: request.leaveType,
     fromDate: request.fromDate,
     toDate: request.toDate,
