@@ -4,11 +4,13 @@
     "slug": "employee-attendance-portal",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "employeeportal",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "static",
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
@@ -23,10 +25,39 @@
         {
           "photosPermission": "Allow Employee Portal to choose a profile picture."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#1D4ED8"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "32050f51-4c75-4370-bc08-44b7c1de8534"
+      }
+    },
+    "android": {
+      "package": "com.sahithi18181.employeeattendanceportal",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1D4ED8"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.sahithi18181.employeeattendanceportal",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     }
   }
 }
