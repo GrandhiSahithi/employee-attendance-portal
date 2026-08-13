@@ -53,7 +53,7 @@ export async function runAutoCheckoutSweep() {
 
   const openRecords = await prisma.attendance.findMany({
     where: { checkOutTime: null, checkInTimezone: { not: null } },
-    select: { id: true, workDate: true, checkInTimezone: true },
+    select: { id: true, workDate: true, checkInTimezone: true, checkInLatitude: true, checkInLongitude: true },
   });
 
   let checkedOut = 0;
@@ -61,12 +61,22 @@ export async function runAutoCheckoutSweep() {
     const cutoffUtc = localCutoffToUtc(record.workDate, record.checkInTimezone);
     if (!cutoffUtc || cutoffUtc > now) continue;
 
+    // No real GPS reading exists for an automatic checkout, so it reuses
+    // the check-in coordinates: this keeps checkOutGPS populated (instead
+    // of blank) and doubles as a visible signal, alongside checkoutType,
+    // that the checkout wasn't a manually captured location.
+    //
     // Conditional update: only applies if the record is still open, so a
     // concurrent manual checkout or another sweep can never be overwritten
     // or double-processed (Postgres row-level locking makes this atomic).
     const result = await prisma.attendance.updateMany({
       where: { id: record.id, checkOutTime: null },
-      data: { checkOutTime: cutoffUtc, checkoutType: 'AUTOMATIC' },
+      data: {
+        checkOutTime: cutoffUtc,
+        checkoutType: 'AUTOMATIC',
+        checkOutLatitude: record.checkInLatitude,
+        checkOutLongitude: record.checkInLongitude,
+      },
     });
     if (result.count === 1) checkedOut += 1;
   }
