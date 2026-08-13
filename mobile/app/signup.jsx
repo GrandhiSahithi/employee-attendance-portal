@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -12,8 +12,8 @@ import { useTheme } from '../src/context/ThemeContext';
 import { api, getApiError } from '../src/services/api';
 
 const EMPTY = {
-  name: '', employeeId: '', email: '', password: 'password-123', phone: '', role: 'EMPLOYEE',
-  jobTitle: '', departmentId: '', teamId: '', supervisorId: '', departmentName: '', teamName: '',
+  name: '', employeeId: '', email: '', password: 'password-123', phone: '',
+  jobTitle: '', departmentId: '', supervisorId: '', departmentName: '', teamName: '',
 };
 
 function domainType(email) {
@@ -40,10 +40,7 @@ export default function Signup() {
     (async () => {
       try {
         const { data } = await api.get('/auth/signup-options');
-        if (alive) {
-          setOptions(data);
-          if (data.needsSetup) setForm((current) => ({ ...current, role: 'HEAD_MANAGER' }));
-        }
+        if (alive) setOptions(data);
       } catch (e) {
         if (alive) setError(await getApiError(e));
       } finally {
@@ -54,8 +51,8 @@ export default function Signup() {
   }, []);
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  const teams = useMemo(() => options?.teams?.filter((team) => team.departmentId === form.departmentId) || [], [options, form.departmentId]);
-  const supervisors = form.role === 'EMPLOYEE' ? options?.managers || [] : form.role === 'MANAGER' ? options?.heads || [] : [];
+  const managers = options?.managers || [];
+  const selectedManager = managers.find((manager) => manager.id === form.supervisorId) || null;
   const emailType = domainType(form.email);
 
   const changeEmail = (value) => {
@@ -72,15 +69,13 @@ export default function Signup() {
     if (options?.needsSetup) {
       if (!form.departmentName.trim() || !form.teamName.trim()) return setError('Department and team are required for the first account.');
     } else {
-      if (!form.departmentId || !form.teamId) return setError('Select a department and team.');
-      if (form.role !== 'HEAD_MANAGER' && !form.supervisorId) return setError(form.role === 'MANAGER' ? 'Select a Head Manager.' : 'Select a Manager.');
+      if (!form.departmentId) return setError('Select a department.');
+      if (!form.supervisorId) return setError('Select a Manager.');
     }
 
     setSaving(true);
     try {
-      const payload = options?.needsSetup
-        ? { ...form, role: 'HEAD_MANAGER', email: form.email.trim().toLowerCase() }
-        : { ...form, email: form.email.trim().toLowerCase() };
+      const payload = { ...form, email: form.email.trim().toLowerCase() };
       await signup(payload);
       router.replace('/dashboard');
     } catch (e) {
@@ -112,7 +107,7 @@ export default function Signup() {
           <Text style={[styles.sub, { color: colors.muted }]}>
             {options?.needsSetup
               ? 'This is the first account, so it becomes the first Head Manager and creates the first department and team.'
-              : 'Create an Employee, Manager, or Head Manager profile. The account is saved directly in PostgreSQL.'}
+              : 'Join as an Employee reporting to an existing Manager. Manager and Team accounts are set up by your Head Manager.'}
           </Text>
           <View style={[styles.note, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={{ color: colors.text, fontWeight: '900' }}>Email accounts</Text>
@@ -131,7 +126,7 @@ export default function Signup() {
 
           <FormField label="Email" value={form.email} onChangeText={changeEmail} autoCapitalize="none" keyboardType="email-address" placeholder="name@dev.com or name@gmail.com" />
 
-          <FormField label="Password"alue={form.password} onChangeText={(value) => update('password', value)} secureTextEntry placeholder="Minimum 8 characters" />
+          <FormField label="Password" value={form.password} onChangeText={(value) => update('password', value)} secureTextEntry placeholder="Minimum 8 characters" />
           <View style={styles.two}>
             <FormField style={styles.field} label="Phone" value={form.phone} onChangeText={(value) => update('phone', value)} keyboardType="phone-pad" placeholder="Optional" />
             <FormField style={styles.field} label="Job Title" value={form.jobTitle} onChangeText={(value) => update('jobTitle', value)} placeholder="Software Engineer" />
@@ -150,16 +145,22 @@ export default function Signup() {
             </>
           ) : (
             <>
-              <Label text="Role" colors={colors} />
-              <View style={styles.choices}>{['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER'].map((role) => <Choice key={role} label={role.replaceAll('_', ' ')} active={form.role === role} onPress={() => setForm((current) => ({ ...current, role, supervisorId: '' }))} colors={colors} />)}</View>
+              <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>
+                New accounts join as an Employee. Department is independent of your reporting Manager - pick any department, and any team.
+              </Text>
               <Label text="Department" colors={colors} />
-              <View style={styles.choices}>{options?.departments?.map((department) => <Choice key={department.id} label={department.name} active={form.departmentId === department.id} onPress={() => setForm((current) => ({ ...current, departmentId: department.id, teamId: '' }))} colors={colors} />)}</View>
-              <Label text="Team / Section" colors={colors} />
-              <View style={styles.choices}>{teams.map((team) => <Choice key={team.id} label={team.name} active={form.teamId === team.id} onPress={() => update('teamId', team.id)} colors={colors} />)}</View>
-              {form.role !== 'HEAD_MANAGER' && <>
-                <Label text={form.role === 'MANAGER' ? 'Head Manager' : 'Manager'} colors={colors} />
-                <View style={styles.choices}>{supervisors.map((supervisor) => <Choice key={supervisor.id} label={supervisor.name} active={form.supervisorId === supervisor.id} onPress={() => update('supervisorId', supervisor.id)} colors={colors} />)}</View>
-              </>}
+              <View style={styles.choices}>{options?.departments?.map((department) => <Choice key={department.id} label={department.name} active={form.departmentId === department.id} onPress={() => update('departmentId', department.id)} colors={colors} />)}</View>
+
+              <Label text="Manager" colors={colors} />
+              <View style={styles.choices}>{managers.map((manager) => <Choice key={manager.id} label={`${manager.name} — ${manager.teamName}`} active={form.supervisorId === manager.id} onPress={() => update('supervisorId', manager.id)} colors={colors} />)}</View>
+
+              <Label text="Team" colors={colors} />
+              <View style={styles.choices}>{managers.map((manager) => <Choice key={manager.id} label={manager.teamName} active={form.supervisorId === manager.id} onPress={() => update('supervisorId', manager.id)} colors={colors} />)}</View>
+              {!!selectedManager && (
+                <Text style={{ color: colors.muted, fontSize: 12 }}>
+                  You will report to <Text style={{ fontWeight: '900', color: colors.text }}>{selectedManager.name}</Text> on team <Text style={{ fontWeight: '900', color: colors.text }}>{selectedManager.teamName}</Text>.
+                </Text>
+              )}
             </>
           )}
 

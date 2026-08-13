@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import RequireAuth from '../src/components/RequireAuth';
 import Screen from '../src/components/Screen';
@@ -12,8 +12,10 @@ import { api, getApiError } from '../src/services/api';
 
 const EMPTY = {
   name: '', employeeId: '', email: '', password: 'password-123', phone: '', role: 'EMPLOYEE',
-  jobTitle: '', departmentId: '', teamId: '', supervisorId: '',
+  jobTitle: '', departmentId: '', supervisorId: '', newTeamName: '',
 };
+
+const isManagerRole = (role) => role === 'MANAGER' || role === 'HEAD_MANAGER';
 
 export default function AdminScreen() {
   return <RequireAuth roles={['HEAD_MANAGER']}><Admin /></RequireAuth>;
@@ -22,12 +24,12 @@ export default function AdminScreen() {
 function Admin() {
   const { colors } = useTheme();
   const [tab, setTab] = useState('people');
-  const [options, setOptions] = useState({ departments: [], teams: [], heads: [], managers: [], employees: [] });
+  const [options, setOptions] = useState({ departments: [], heads: [], managers: [] });
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [deptName, setDeptName] = useState('');
-  const [teamName, setTeamName] = useState('');
-  const [teamDept, setTeamDept] = useState('');
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(() => new Set());
   const [selectedId, setSelectedId] = useState(null);
   const [edit, setEdit] = useState(null);
   const [message, setMessage] = useState('');
@@ -51,8 +53,8 @@ function Admin() {
   useEffect(() => { load(); }, [load]);
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  const createTeams = useMemo(() => options.teams.filter((team) => team.departmentId === form.departmentId), [options, form.departmentId]);
-  const createSupervisors = form.role === 'EMPLOYEE' ? options.managers : form.role === 'MANAGER' ? options.heads : [];
+  const changeRole = (role) => setForm((current) => ({ ...current, role, supervisorId: '', newTeamName: '' }));
+  const selectedFormManager = options.managers.find((manager) => manager.id === form.supervisorId) || null;
 
   const openManage = (user) => {
     setSelectedId(user.id);
@@ -60,24 +62,24 @@ function Admin() {
       role: user.role,
       supervisorId: user.supervisorId || '',
       departmentId: user.departmentId || '',
-      teamId: user.teamId || '',
       jobTitle: user.jobTitle || 'Team Member',
+      newTeamName: '',
     });
     setMessage('');
     setError('');
   };
 
-  const editTeams = useMemo(
-    () => options.teams.filter((team) => team.departmentId === edit?.departmentId),
-    [options, edit?.departmentId],
-  );
-  const editSupervisors = edit?.role === 'EMPLOYEE' ? options.managers : edit?.role === 'MANAGER' ? options.heads : [];
+  const managingUser = users.find((user) => user.id === selectedId) || null;
+  const editNeedsNewTeam = !!edit && isManagerRole(edit.role) && !managingUser?.leadsTeamId;
+  const editSelectedManager = options.managers.find((manager) => manager.id === edit?.supervisorId) || null;
 
   const createUser = async () => {
     setError(''); setMessage('');
     if (!form.email.trim().toLowerCase().endsWith('@dev.com')) return setError('Head-created accounts use @dev.com. Gmail users must use public Sign Up and verify their OTP.');
-    if (!form.departmentId || !form.teamId) return setError('Department and team are required.');
-    if (form.role !== 'HEAD_MANAGER' && !form.supervisorId) return setError(form.role === 'MANAGER' ? 'Choose a Head Manager.' : 'Choose a Manager.');
+    if (!form.departmentId) return setError('Department is required.');
+    if (form.role === 'EMPLOYEE' && !form.supervisorId) return setError('Choose a Manager.');
+    if (form.role === 'MANAGER' && !form.supervisorId) return setError('Choose a Head Manager.');
+    if (form.role !== 'EMPLOYEE' && !form.newTeamName.trim()) return setError(`Enter a name for the new team this ${form.role === 'MANAGER' ? 'Manager' : 'Head Manager'} will lead.`);
     setSaving(true);
     try {
       const { data } = await api.post('/management/users', { ...form, email: form.email.trim().toLowerCase() });
@@ -92,22 +94,21 @@ function Admin() {
   };
 
   const saveManagedUser = async () => {
-    if (!selectedId || !edit) return;
+    if (!selectedId || !edit || !managingUser) return;
     setSaving(true); setError(''); setMessage('');
     try {
-      const selected = users.find((user) => user.id === selectedId);
-      if (!selected) throw new Error('User not found.');
       if (edit.role !== 'HEAD_MANAGER' && !edit.supervisorId) throw new Error(edit.role === 'MANAGER' ? 'Choose a Head Manager.' : 'Choose a Manager.');
-      if (!edit.departmentId || !edit.teamId || !edit.jobTitle.trim()) throw new Error('Department, team and job title are required.');
+      if (editNeedsNewTeam && !edit.newTeamName.trim()) throw new Error(`Enter a name for the new team this ${edit.role === 'MANAGER' ? 'Manager' : 'Head Manager'} will lead.`);
+      if (!edit.departmentId || !edit.jobTitle.trim()) throw new Error('Department and job title are required.');
 
       await api.patch(`/management/users/${selectedId}/role`, {
         role: edit.role,
         supervisorId: edit.role === 'HEAD_MANAGER' ? null : edit.supervisorId,
+        newTeamName: editNeedsNewTeam ? edit.newTeamName : undefined,
       });
       const { data } = await api.patch(`/management/users/${selectedId}/assignment`, {
         supervisorId: edit.role === 'HEAD_MANAGER' ? null : edit.supervisorId,
         departmentId: edit.departmentId,
-        teamId: edit.teamId,
         jobTitle: edit.jobTitle,
       });
       setMessage(`Role and assignment updated for ${data.user.name}.`);
@@ -140,13 +141,35 @@ function Admin() {
     } catch (e) { setError(await getApiError(e)); }
   };
 
-  const createTeam = async () => {
-    setError(''); setMessage('');
-    try {
-      const { data } = await api.post('/organization/teams', { name: teamName, departmentId: teamDept });
-      setMessage(data.message); setTeamName(''); await load();
-    } catch (e) { setError(await getApiError(e)); }
-  };
+  const toggleExpanded = (id) => setExpanded((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const searchQuery = search.trim().toLowerCase();
+  const searchResults = useMemo(() => {
+    if (!searchQuery) return null;
+    return users.filter((user) => (
+      user.name?.toLowerCase().includes(searchQuery)
+      || user.email?.toLowerCase().includes(searchQuery)
+      || user.employeeId?.toLowerCase().includes(searchQuery)
+    ));
+  }, [users, searchQuery]);
+
+  const managers = useMemo(
+    () => users.filter((user) => isManagerRole(user.role)).sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'HEAD_MANAGER' ? -1 : 1)),
+    [users],
+  );
+  const reportsByManagerId = useMemo(() => {
+    const map = new Map();
+    for (const user of users) {
+      if (!user.supervisorId) continue;
+      if (!map.has(user.supervisorId)) map.set(user.supervisorId, []);
+      map.get(user.supervisorId).push(user);
+    }
+    return map;
+  }, [users]);
 
   return (
     <Screen contentStyle={styles.page}>
@@ -156,7 +179,7 @@ function Admin() {
         {[
           ['people', 'People & Roles'],
           ['create', 'Create Account'],
-          ['structure', 'Departments & Teams'],
+          ['structure', 'Departments'],
         ].map(([value, label]) => (
           <Pressable key={value} onPress={() => setTab(value)} style={[styles.tab, { borderColor: tab === value ? colors.primary : colors.border, backgroundColor: tab === value ? colors.primarySoft : colors.surface }]}>
             <Text style={{ color: colors.text, fontWeight: '900' }}>{label}</Text>
@@ -181,16 +204,34 @@ function Admin() {
             <FormField style={styles.field} label="Phone" value={form.phone} onChangeText={(value) => update('phone', value)} />
             <FormField style={styles.field} label="Job Title" value={form.jobTitle} onChangeText={(value) => update('jobTitle', value)} />
           </View>
+
           <Label text="Role" colors={colors} />
-          <View style={styles.choices}>{['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER'].map((role) => <Choice key={role} label={role.replaceAll('_', ' ')} active={form.role === role} onPress={() => update('role', role)} colors={colors} />)}</View>
+          <View style={styles.choices}>{['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER'].map((role) => <Choice key={role} label={role.replaceAll('_', ' ')} active={form.role === role} onPress={() => changeRole(role)} colors={colors} />)}</View>
+
           <Label text="Department" colors={colors} />
-          <View style={styles.choices}>{options.departments.map((department) => <Choice key={department.id} label={department.name} active={form.departmentId === department.id} onPress={() => { update('departmentId', department.id); update('teamId', ''); }} colors={colors} />)}</View>
-          <Label text="Team / Section" colors={colors} />
-          <View style={styles.choices}>{createTeams.map((team) => <Choice key={team.id} label={team.name} active={form.teamId === team.id} onPress={() => update('teamId', team.id)} colors={colors} />)}</View>
-          {form.role !== 'HEAD_MANAGER' && <>
-            <Label text={form.role === 'MANAGER' ? 'Head Manager' : 'Manager'} colors={colors} />
-            <View style={styles.choices}>{createSupervisors.map((supervisor) => <Choice key={supervisor.id} label={supervisor.name} active={form.supervisorId === supervisor.id} onPress={() => update('supervisorId', supervisor.id)} colors={colors} />)}</View>
+          <Text style={{ color: colors.muted, fontSize: 12 }}>Independent of Manager/Team - any department is valid for any role.</Text>
+          <View style={styles.choices}>{options.departments.map((department) => <Choice key={department.id} label={department.name} active={form.departmentId === department.id} onPress={() => update('departmentId', department.id)} colors={colors} />)}</View>
+
+          {form.role === 'EMPLOYEE' && <>
+            <Label text="Manager" colors={colors} />
+            <View style={styles.choices}>{options.managers.map((manager) => <Choice key={manager.id} label={`${manager.name} — ${manager.teamName}`} active={form.supervisorId === manager.id} onPress={() => update('supervisorId', manager.id)} colors={colors} />)}</View>
+            <Label text="Team" colors={colors} />
+            <View style={styles.choices}>{options.managers.map((manager) => <Choice key={manager.id} label={manager.teamName} active={form.supervisorId === manager.id} onPress={() => update('supervisorId', manager.id)} colors={colors} />)}</View>
+            {!!selectedFormManager && <Text style={{ color: colors.muted, fontSize: 12 }}>Reports to {selectedFormManager.name} on team {selectedFormManager.teamName}.</Text>}
           </>}
+
+          {form.role === 'MANAGER' && <>
+            <Label text="Reports to Head Manager" colors={colors} />
+            <View style={styles.choices}>{options.heads.map((head) => <Choice key={head.id} label={head.name} active={form.supervisorId === head.id} onPress={() => update('supervisorId', head.id)} colors={colors} />)}</View>
+            <FormField label="New Team Name" value={form.newTeamName} onChangeText={(value) => update('newTeamName', value)} placeholder="e.g. Pluto" />
+            <Text style={{ color: colors.muted, fontSize: 12 }}>This creates a brand-new team led by this Manager.</Text>
+          </>}
+
+          {form.role === 'HEAD_MANAGER' && <>
+            <FormField label="New Team Name" value={form.newTeamName} onChangeText={(value) => update('newTeamName', value)} placeholder="e.g. Leadership" />
+            <Text style={{ color: colors.muted, fontSize: 12 }}>This creates a brand-new team led by this Head Manager.</Text>
+          </>}
+
           <AppButton title="Create Account" loading={saving} onPress={createUser} />
         </View>
       )}
@@ -199,74 +240,256 @@ function Admin() {
         <View style={styles.two}>
           <View style={[styles.card, styles.structure, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.cardTitle, { color: colors.text }]}>New Department</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Departments are independent of Manager/Team - creating one doesn't affect any reporting relationship.</Text>
             <FormField label="Department Name" value={deptName} onChangeText={setDeptName} placeholder="Engineering" />
             <AppButton title="Create Department" onPress={createDept} />
           </View>
           <View style={[styles.card, styles.structure, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>New Team / Section</Text>
-            <FormField label="Team Name" value={teamName} onChangeText={setTeamName} placeholder="Platform" />
-            <Label text="Department" colors={colors} />
-            <View style={styles.choices}>{options.departments.map((department) => <Choice key={department.id} label={department.name} active={teamDept === department.id} onPress={() => setTeamDept(department.id)} colors={colors} />)}</View>
-            <AppButton title="Create Team" onPress={createTeam} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Teams</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Every team is led by exactly one Manager or Head Manager. New teams are created together with a new Manager/Head Manager account, or when promoting someone into that role - see Create Account and People & Roles.</Text>
+            <View style={{ gap: 8 }}>
+              {managers.map((manager) => (
+                <View key={manager.id} style={[styles.teamRow, { borderColor: colors.border }]}>
+                  <Text style={{ color: colors.text, fontWeight: '800' }}>{manager.leadsTeamName || '—'}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12 }}>{manager.name} · {manager.role.replaceAll('_', ' ')}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
       )}
 
       {tab === 'people' && (
-        <View style={{ gap: 10 }}>
-          {users.map((user) => (
-            <View key={user.id} style={[styles.person, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.personTop}>
-                <View style={{ flex: 1, minWidth: 220 }}>
-                  <View style={styles.nameRow}>
-                    <Text style={{ color: colors.text, fontWeight: '900', fontSize: 16 }}>{user.name}</Text>
-                    <View style={[styles.statusDot, { backgroundColor: user.isActive ? colors.success : colors.danger }]} />
-                  </View>
-                  <Text style={{ color: colors.muted, marginTop: 4 }}>{user.employeeId} · {user.role?.replaceAll('_', ' ')} · {user.department || '—'} / {user.team || '—'}</Text>
-                  <Text style={{ color: colors.muted, marginTop: 3 }}>Reports to: {user.supervisorName || '—'}</Text>
-                </View>
-                <View style={styles.personButtons}>
-                  <Pressable onPress={() => openManage(user)} style={[styles.manageBtn, { backgroundColor: colors.primarySoft, borderColor: colors.border }]}>
-                    <Ionicons name="settings-outline" size={17} color={colors.primary} />
-                    <Text style={{ color: colors.primary, fontWeight: '900' }}>Manage</Text>
-                  </Pressable>
-                  <Pressable onPress={() => toggleStatus(user)} style={[styles.manageBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                    <Text style={{ color: user.isActive ? colors.danger : colors.success, fontWeight: '900' }}>{user.isActive ? 'Deactivate' : 'Activate'}</Text>
-                  </Pressable>
-                </View>
-              </View>
+        <View style={{ gap: 12 }}>
+          <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="search-outline" size={18} color={colors.muted} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search by name, email, or employee ID..."
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+            />
+            {!!search && (
+              <Pressable onPress={() => setSearch('')}>
+                <Ionicons name="close-circle" size={18} color={colors.muted} />
+              </Pressable>
+            )}
+          </View>
 
-              {selectedId === user.id && edit && (
-                <View style={[styles.managePanel, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.panelTitle, { color: colors.text }]}>Change role and assignment</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12 }}>A role change keeps the same account, attendance history, leave history, email, and profile picture.</Text>
-
-                  <Label text="Role" colors={colors} />
-                  <View style={styles.choices}>{['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER'].map((role) => <Choice key={role} label={role.replaceAll('_', ' ')} active={edit.role === role} onPress={() => setEdit((current) => ({ ...current, role, supervisorId: role === 'HEAD_MANAGER' ? '' : current.supervisorId }))} colors={colors} />)}</View>
-
-                  {edit.role !== 'HEAD_MANAGER' && <>
-                    <Label text={edit.role === 'MANAGER' ? 'Reports to Head Manager' : 'Reports to Manager'} colors={colors} />
-                    <View style={styles.choices}>{editSupervisors.filter((supervisor) => supervisor.id !== user.id).map((supervisor) => <Choice key={supervisor.id} label={supervisor.name} active={edit.supervisorId === supervisor.id} onPress={() => setEdit((current) => ({ ...current, supervisorId: supervisor.id }))} colors={colors} />)}</View>
-                  </>}
-
-                  <Label text="Department" colors={colors} />
-                  <View style={styles.choices}>{options.departments.map((department) => <Choice key={department.id} label={department.name} active={edit.departmentId === department.id} onPress={() => setEdit((current) => ({ ...current, departmentId: department.id, teamId: '' }))} colors={colors} />)}</View>
-
-                  <Label text="Team / Section" colors={colors} />
-                  <View style={styles.choices}>{editTeams.map((team) => <Choice key={team.id} label={team.name} active={edit.teamId === team.id} onPress={() => setEdit((current) => ({ ...current, teamId: team.id }))} colors={colors} />)}</View>
-
-                  <FormField label="Job Title" value={edit.jobTitle} onChangeText={(value) => setEdit((current) => ({ ...current, jobTitle: value }))} />
-                  <View style={styles.panelActions}>
-                    <AppButton style={{ flex: 1 }} title="Save Role & Assignment" loading={saving} onPress={saveManagedUser} />
-                    <AppButton style={{ flex: 1 }} title="Cancel" variant="secondary" onPress={() => { setSelectedId(null); setEdit(null); }} />
-                  </View>
-                </View>
-              )}
+          {searchResults ? (
+            <View style={{ gap: 10 }}>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>{searchResults.length} result{searchResults.length === 1 ? '' : 's'} for "{search.trim()}"</Text>
+              {searchResults.length === 0 ? (
+                <EmptyState colors={colors} text="No one matches that search." />
+              ) : searchResults.map((user) => (
+                <PersonCard
+                  key={user.id}
+                  user={user}
+                  colors={colors}
+                  contextLine={isManagerRole(user.role)
+                    ? `Leads ${user.leadsTeamName || '—'}${user.supervisorName ? ` · Reports to ${user.supervisorName}` : ''}`
+                    : `Reports to ${user.supervisorName || '—'} · Team ${user.team || '—'}`}
+                  selected={selectedId === user.id}
+                  edit={edit}
+                  onManage={() => openManage(user)}
+                  onToggleStatus={() => toggleStatus(user)}
+                  onCancel={() => { setSelectedId(null); setEdit(null); }}
+                  onSave={saveManagedUser}
+                  saving={saving}
+                  setEdit={setEdit}
+                  options={options}
+                  editNeedsNewTeam={editNeedsNewTeam}
+                  editSelectedManager={editSelectedManager}
+                />
+              ))}
             </View>
-          ))}
+          ) : (
+            <View style={{ gap: 10 }}>
+              {managers.map((manager) => {
+                const isOpen = expanded.has(manager.id);
+                const reports = reportsByManagerId.get(manager.id) || [];
+                return (
+                  <View key={manager.id} style={[styles.managerGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Pressable onPress={() => toggleExpanded(manager.id)} style={styles.managerHeader}>
+                      <Ionicons name={isOpen ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.muted} />
+                      <View style={{ flex: 1, minWidth: 180 }}>
+                        <View style={styles.nameRow}>
+                          <Text style={{ color: colors.text, fontWeight: '900', fontSize: 16 }}>{manager.name}</Text>
+                          <View style={[styles.roleBadge, { backgroundColor: manager.role === 'HEAD_MANAGER' ? colors.goldSoft : colors.primarySoft }]}>
+                            <Text style={{ color: manager.role === 'HEAD_MANAGER' ? colors.gold : colors.primary, fontWeight: '800', fontSize: 11 }}>{manager.role.replaceAll('_', ' ')}</Text>
+                          </View>
+                          <View style={[styles.statusDot, { backgroundColor: manager.isActive ? colors.success : colors.danger }]} />
+                        </View>
+                        <Text style={{ color: colors.muted, marginTop: 3, fontSize: 12 }}>
+                          Team: {manager.leadsTeamName || '—'} · {manager.department || '—'} · {reports.length} report{reports.length === 1 ? '' : 's'}
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => openManage(manager)} style={[styles.manageBtn, { backgroundColor: colors.primarySoft, borderColor: colors.border }]}>
+                        <Ionicons name="settings-outline" size={16} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontWeight: '900' }}>Manage</Text>
+                      </Pressable>
+                    </Pressable>
+
+                    {selectedId === manager.id && edit && (
+                      <ManagePanel
+                        colors={colors}
+                        edit={edit}
+                        setEdit={setEdit}
+                        options={options}
+                        editNeedsNewTeam={editNeedsNewTeam}
+                        editSelectedManager={editSelectedManager}
+                        onSave={saveManagedUser}
+                        onCancel={() => { setSelectedId(null); setEdit(null); }}
+                        saving={saving}
+                      />
+                    )}
+
+                    {isOpen && (
+                      <View style={styles.reportsList}>
+                        {reports.length === 0 ? (
+                          <Text style={{ color: colors.muted, fontSize: 12, paddingVertical: 6 }}>No one reports to {manager.name} yet.</Text>
+                        ) : reports.map((employee) => (
+                          <View key={employee.id}>
+                            <View style={[styles.employeeRow, { borderTopColor: colors.border }]}>
+                              <View style={{ flex: 1, minWidth: 180 }}>
+                                <View style={styles.nameRow}>
+                                  <Text style={{ color: colors.text, fontWeight: '800' }}>{employee.name}</Text>
+                                  <View style={[styles.statusDot, { backgroundColor: employee.isActive ? colors.success : colors.danger }]} />
+                                </View>
+                                <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>{employee.employeeId} · {employee.role.replaceAll('_', ' ')} · Dept: {employee.department || '—'}</Text>
+                              </View>
+                              <View style={styles.personButtons}>
+                                <Pressable onPress={() => openManage(employee)} style={[styles.manageBtn, { backgroundColor: colors.primarySoft, borderColor: colors.border }]}>
+                                  <Ionicons name="settings-outline" size={15} color={colors.primary} />
+                                  <Text style={{ color: colors.primary, fontWeight: '900', fontSize: 13 }}>Manage</Text>
+                                </Pressable>
+                                <Pressable onPress={() => toggleStatus(employee)} style={[styles.manageBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                                  <Text style={{ color: employee.isActive ? colors.danger : colors.success, fontWeight: '900', fontSize: 13 }}>{employee.isActive ? 'Deactivate' : 'Activate'}</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                            {selectedId === employee.id && edit && (
+                              <ManagePanel
+                                colors={colors}
+                                edit={edit}
+                                setEdit={setEdit}
+                                options={options}
+                                editNeedsNewTeam={editNeedsNewTeam}
+                                editSelectedManager={editSelectedManager}
+                                onSave={saveManagedUser}
+                                onCancel={() => { setSelectedId(null); setEdit(null); }}
+                                saving={saving}
+                              />
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
       )}
     </Screen>
+  );
+}
+
+function PersonCard({ user, colors, contextLine, selected, edit, onManage, onToggleStatus, onCancel, onSave, saving, setEdit, options, editNeedsNewTeam, editSelectedManager }) {
+  return (
+    <View style={[styles.person, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.personTop}>
+        <View style={{ flex: 1, minWidth: 220 }}>
+          <View style={styles.nameRow}>
+            <Text style={{ color: colors.text, fontWeight: '900', fontSize: 16 }}>{user.name}</Text>
+            <View style={[styles.roleBadge, { backgroundColor: user.role === 'HEAD_MANAGER' ? colors.goldSoft : user.role === 'MANAGER' ? colors.primarySoft : colors.surfaceAlt }]}>
+              <Text style={{ color: user.role === 'HEAD_MANAGER' ? colors.gold : user.role === 'MANAGER' ? colors.primary : colors.text, fontWeight: '800', fontSize: 11 }}>{user.role.replaceAll('_', ' ')}</Text>
+            </View>
+            <View style={[styles.statusDot, { backgroundColor: user.isActive ? colors.success : colors.danger }]} />
+          </View>
+          <Text style={{ color: colors.muted, marginTop: 4 }}>{user.employeeId} · {user.email} · Dept: {user.department || '—'}</Text>
+          <Text style={{ color: colors.muted, marginTop: 3 }}>{contextLine}</Text>
+        </View>
+        <View style={styles.personButtons}>
+          <Pressable onPress={onManage} style={[styles.manageBtn, { backgroundColor: colors.primarySoft, borderColor: colors.border }]}>
+            <Ionicons name="settings-outline" size={17} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontWeight: '900' }}>Manage</Text>
+          </Pressable>
+          <Pressable onPress={onToggleStatus} style={[styles.manageBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <Text style={{ color: user.isActive ? colors.danger : colors.success, fontWeight: '900' }}>{user.isActive ? 'Deactivate' : 'Activate'}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {selected && edit && (
+        <ManagePanel
+          colors={colors}
+          edit={edit}
+          setEdit={setEdit}
+          options={options}
+          editNeedsNewTeam={editNeedsNewTeam}
+          editSelectedManager={editSelectedManager}
+          onSave={onSave}
+          onCancel={onCancel}
+          saving={saving}
+        />
+      )}
+    </View>
+  );
+}
+
+function ManagePanel({ colors, edit, setEdit, options, editNeedsNewTeam, editSelectedManager, onSave, onCancel, saving }) {
+  const changeRole = (role) => setEdit((current) => ({ ...current, role, supervisorId: '', newTeamName: '' }));
+  return (
+    <View style={[styles.managePanel, { borderTopColor: colors.border }]}>
+      <Text style={[styles.panelTitle, { color: colors.text }]}>Change role and assignment</Text>
+      <Text style={{ color: colors.muted, fontSize: 12 }}>A role change keeps the same account, attendance history, leave history, email, and profile picture.</Text>
+
+      <Label text="Role" colors={colors} />
+      <View style={styles.choices}>{['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER'].map((role) => <Choice key={role} label={role.replaceAll('_', ' ')} active={edit.role === role} onPress={() => changeRole(role)} colors={colors} />)}</View>
+
+      <Label text="Department" colors={colors} />
+      <Text style={{ color: colors.muted, fontSize: 12 }}>Independent of Manager/Team.</Text>
+      <View style={styles.choices}>{options.departments.map((department) => <Choice key={department.id} label={department.name} active={edit.departmentId === department.id} onPress={() => setEdit((current) => ({ ...current, departmentId: department.id }))} colors={colors} />)}</View>
+
+      {edit.role === 'EMPLOYEE' && <>
+        <Label text="Manager" colors={colors} />
+        <View style={styles.choices}>{options.managers.map((manager) => <Choice key={manager.id} label={`${manager.name} — ${manager.teamName}`} active={edit.supervisorId === manager.id} onPress={() => setEdit((current) => ({ ...current, supervisorId: manager.id }))} colors={colors} />)}</View>
+        <Label text="Team" colors={colors} />
+        <View style={styles.choices}>{options.managers.map((manager) => <Choice key={manager.id} label={manager.teamName} active={edit.supervisorId === manager.id} onPress={() => setEdit((current) => ({ ...current, supervisorId: manager.id }))} colors={colors} />)}</View>
+        {!!editSelectedManager && <Text style={{ color: colors.muted, fontSize: 12 }}>Reports to {editSelectedManager.name} on team {editSelectedManager.teamName}.</Text>}
+      </>}
+
+      {edit.role === 'MANAGER' && <>
+        <Label text="Reports to Head Manager" colors={colors} />
+        <View style={styles.choices}>{options.heads.map((head) => <Choice key={head.id} label={head.name} active={edit.supervisorId === head.id} onPress={() => setEdit((current) => ({ ...current, supervisorId: head.id }))} colors={colors} />)}</View>
+      </>}
+
+      {editNeedsNewTeam && (
+        <>
+          <FormField label="New Team Name" value={edit.newTeamName} onChangeText={(value) => setEdit((current) => ({ ...current, newTeamName: value }))} placeholder="e.g. Pluto" />
+          <Text style={{ color: colors.muted, fontSize: 12 }}>This person doesn't lead a team yet - this creates one for them.</Text>
+        </>
+      )}
+
+      <FormField label="Job Title" value={edit.jobTitle} onChangeText={(value) => setEdit((current) => ({ ...current, jobTitle: value }))} />
+      <View style={styles.panelActions}>
+        <AppButton style={{ flex: 1 }} title="Save Role & Assignment" loading={saving} onPress={onSave} />
+        <AppButton style={{ flex: 1 }} title="Cancel" variant="secondary" onPress={onCancel} />
+      </View>
+    </View>
+  );
+}
+
+function EmptyState({ colors, text }) {
+  return (
+    <View style={[styles.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <Ionicons name="people-outline" size={26} color={colors.muted} />
+      <Text style={{ color: colors.muted, fontWeight: '700' }}>{text}</Text>
+    </View>
   );
 }
 
@@ -294,13 +517,22 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: '900' },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   choice: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 8 },
+  teamRow: { borderWidth: 1, borderRadius: 12, padding: 10 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12 },
+  searchInput: { flex: 1, minHeight: 46, fontSize: 15 },
   person: { borderWidth: 1, borderRadius: 17, padding: 15, gap: 12 },
   personTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
+  roleBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   personButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   manageBtn: { minHeight: 39, borderWidth: 1, borderRadius: 11, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
-  managePanel: { borderTopWidth: 1, paddingTop: 14, gap: 11 },
+  managePanel: { borderTopWidth: 1, paddingTop: 14, gap: 11, marginTop: 12 },
   panelTitle: { fontSize: 16, fontWeight: '900' },
   panelActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
+  managerGroup: { borderWidth: 1, borderRadius: 17, padding: 15 },
+  managerHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  reportsList: { marginTop: 10, paddingLeft: 26 },
+  employeeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, borderTopWidth: 1, paddingVertical: 10 },
+  empty: { borderWidth: 1, borderRadius: 18, padding: 30, alignItems: 'center', gap: 8 },
 });

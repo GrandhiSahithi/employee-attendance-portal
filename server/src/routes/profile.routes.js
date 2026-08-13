@@ -29,7 +29,7 @@ router.put('/', requireAuth, async (req, res) => {
       name: parsed.data.name,
       phone: parsed.data.phone || null,
     },
-    include: { department: true, team: true, supervisor: true },
+    include: { department: true, team: true, managedTeam: true, supervisor: true },
   });
 
   await prisma.auditLog.create({
@@ -51,7 +51,7 @@ router.post('/photo', requireAuth, profilePhotoUpload.single('photo'), async (re
   const user = await prisma.user.update({
     where: { id: req.user.id },
     data: { profilePicture: `/uploads/${req.file.filename}` },
-    include: { department: true, team: true, supervisor: true },
+    include: { department: true, team: true, managedTeam: true, supervisor: true },
   });
 
   await prisma.auditLog.create({

@@ -42,18 +42,16 @@ function emailRuleMessage() {
 }
 
 /**
- * Validate supervisor selection for signup
- * - HEAD_MANAGER has no supervisor
- * - MANAGER must report to HEAD_MANAGER
- * - EMPLOYEE must report to MANAGER
+ * Validate manager selection for a public Employee signup.
+ * Public signup can only ever create an Employee reporting to an existing
+ * Manager - creating a new Manager/Head Manager account (and the new team
+ * that comes with it) is an authorized-admin-only action, see
+ * management.routes.js.
  */
-async function validateSupervisorForSignup(role, supervisorId) {
-  if (role === 'HEAD_MANAGER') return null;
-  if (!supervisorId) throw new Error(role === 'MANAGER' ? 'Select a Head Manager.' : 'Select a Manager.');
+async function validateManagerForSignup(supervisorId) {
+  if (!supervisorId) throw new Error('Select a Manager.');
   const supervisor = await prisma.user.findUnique({ where: { id: supervisorId } });
-  if (!supervisor || !supervisor.isActive) throw new Error('Selected supervisor is unavailable.');
-  if (role === 'MANAGER' && supervisor.role !== 'HEAD_MANAGER') throw new Error('A Manager must report to a Head Manager.');
-  if (role === 'EMPLOYEE' && supervisor.role !== 'MANAGER') throw new Error('An Employee must report to a Manager.');
+  if (!supervisor || !supervisor.isActive || supervisor.role !== 'MANAGER') throw new Error('Selected manager is unavailable.');
   return supervisor;
 }
 
@@ -68,21 +66,32 @@ router.get('/setup-status', async (_req, res) => {
 
 /**
  * GET /signup-options
- * Get all available options for signup form:
- * - All departments
- * - All teams with their departments
- * - All active head managers
- * - All active managers
+ * Get all available options for the public signup form (Employee accounts
+ * only, post-bootstrap):
+ * - All departments (independent of Manager/Team)
+ * - All active Managers, each carrying the team they lead
  */
 router.get('/signup-options', async (_req, res) => {
-  const [count, departments, teams, heads, managers] = await Promise.all([
+  const [count, departments, managers] = await Promise.all([
     prisma.user.count(),
     prisma.department.findMany({ orderBy: { name: 'asc' } }),
-    prisma.team.findMany({ include: { department: true }, orderBy: [{ department: { name: 'asc' } }, { name: 'asc' }] }),
-    prisma.user.findMany({ where: { role: 'HEAD_MANAGER', isActive: true }, select: { id: true, name: true, employeeId: true }, orderBy: { name: 'asc' } }),
-    prisma.user.findMany({ where: { role: 'MANAGER', isActive: true }, select: { id: true, name: true, employeeId: true, supervisorId: true }, orderBy: { name: 'asc' } }),
+    prisma.user.findMany({
+      where: { role: 'MANAGER', isActive: true },
+      select: { id: true, name: true, employeeId: true, team: { select: { id: true, name: true } } },
+      orderBy: { name: 'asc' },
+    }),
   ]);
-  res.json({ needsSetup: count === 0, departments, teams, heads, managers });
+  res.json({
+    needsSetup: count === 0,
+    departments,
+    managers: managers.map((manager) => ({
+      id: manager.id,
+      name: manager.name,
+      employeeId: manager.employeeId,
+      teamId: manager.team?.id || null,
+      teamName: manager.team?.name || null,
+    })),
+  });
 });
 
 /**
@@ -91,8 +100,11 @@ router.get('/signup-options', async (_req, res) => {
 const otpEmailSchema = z.object({ email: z.string().email() });
 
 /**
- * Validation schema for public signup
- * Supports creating first user (with department/team) or additional users (with existing department/team)
+ * Validation schema for public signup.
+ * Supports creating the first account (bootstraps a department, team, and
+ * Head Manager) or an Employee account reporting to an existing Manager.
+ * Public signup can never create a Manager/Head Manager or a new team -
+ * only an authorized admin can (see management.routes.js).
  */
 const publicSignupSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -100,10 +112,8 @@ const publicSignupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   phone: z.string().trim().max(30).optional().nullable(),
-  role: z.enum(['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER']),
   jobTitle: z.string().trim().min(2).max(100),
   departmentId: z.string().optional().nullable(),
-  teamId: z.string().optional().nullable(),
   supervisorId: z.string().optional().nullable(),
   departmentName: z.preprocess((value) => value === "" ? undefined : value, z.string().trim().min(2).max(80).optional().nullable()),
   teamName: z.preprocess((value) => value === "" ? undefined : value, z.string().trim().min(2).max(80).optional().nullable()),
@@ -139,10 +149,8 @@ router.post('/signup', async (req, res) => {
       user = await prisma.$transaction(async (tx) => {
         // Create initial department
         const department = await tx.department.create({ data: { name: data.departmentName.trim() } });
-        // Create initial team in that department
-        const team = await tx.team.create({ data: { name: data.teamName.trim(), departmentId: department.id } });
         // Create first user as HEAD_MANAGER
-        return tx.user.create({
+        const created = await tx.user.create({
           data: {
             name: data.name.trim(),
             employeeId: data.employeeId.trim(),
@@ -153,11 +161,16 @@ router.post('/signup', async (req, res) => {
             role: 'HEAD_MANAGER',
             jobTitle: data.jobTitle.trim(),
             departmentId: department.id,
-            teamId: team.id,
             supervisorId: null,
             availableLeaveDays: 25,
           },
-          include: { department: true, team: true, supervisor: true },
+        });
+        // Create their team, owned by them, then link it back
+        const team = await tx.team.create({ data: { name: data.teamName.trim(), managerId: created.id } });
+        return tx.user.update({
+          where: { id: created.id },
+          data: { teamId: team.id },
+          include: { department: true, team: true, managedTeam: true, supervisor: true },
         });
       });
       // Log initial setup
@@ -171,17 +184,17 @@ router.post('/signup', async (req, res) => {
         },
       });
     } else {
-      // Existing organization - add user to existing department/team
-      if (!data.departmentId || !data.teamId) return res.status(400).json({ message: 'Select a department and team.' });
-      const team = await prisma.team.findUnique({ where: { id: data.teamId } });
-      if (!team || team.departmentId !== data.departmentId) return res.status(400).json({ message: 'Selected team must belong to the selected department.' });
+      // Existing organization - public signup can only create an Employee
+      // reporting to an existing Manager. Department is independent.
+      if (!data.departmentId) return res.status(400).json({ message: 'Select a department.' });
+      let supervisor;
       try {
-        await validateSupervisorForSignup(data.role, data.supervisorId);
+        supervisor = await validateManagerForSignup(data.supervisorId);
       } catch (error) {
         return res.status(400).json({ message: error.message });
       }
 
-      // Create new user with appropriate role
+      // Create new Employee account, team derived from the chosen manager
       user = await prisma.user.create({
         data: {
           name: data.name.trim(),
@@ -190,15 +203,14 @@ router.post('/signup', async (req, res) => {
           emailVerified: true,
           passwordHash,
           phone: data.phone?.trim() || null,
-          role: data.role,
+          role: 'EMPLOYEE',
           jobTitle: data.jobTitle.trim(),
           departmentId: data.departmentId,
-          teamId: data.teamId,
-          supervisorId: data.role === 'HEAD_MANAGER' ? null : data.supervisorId,
-          // Allocate leave days based on role
-          availableLeaveDays: data.role === 'HEAD_MANAGER' ? 25 : data.role === 'MANAGER' ? 22 : 20,
+          teamId: supervisor.teamId,
+          supervisorId: supervisor.id,
+          availableLeaveDays: 20,
         },
-        include: { department: true, team: true, supervisor: true },
+        include: { department: true, team: true, managedTeam: true, supervisor: true },
       });
       // Log signup
       await prisma.auditLog.create({
@@ -207,7 +219,7 @@ router.post('/signup', async (req, res) => {
           action: 'SELF_SIGNUP',
           targetType: 'User',
           targetId: user.id,
-          details: `${user.name} created a ${user.role} account using ${isDevEmail(email) ? 'company' : 'Gmail'} email`,
+          details: `${user.name} created an EMPLOYEE account using ${isDevEmail(email) ? 'company' : 'Gmail'} email`,
         },
       });
     }
@@ -237,7 +249,7 @@ router.post('/login', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ message: 'Enter a valid email and a password with at least 8 characters.' });
   const email = normalizeEmail(parsed.data.email);
   // Find user by email with related data
-  const user = await prisma.user.findUnique({ where: { email }, include: { department: true, team: true, supervisor: true } });
+  const user = await prisma.user.findUnique({ where: { email }, include: { department: true, team: true, managedTeam: true, supervisor: true } });
   if (!user || !user.isActive) return res.status(401).json({ message: 'Invalid email or password.' });
   // Compare provided password with stored hash
   if (!(await bcrypt.compare(parsed.data.password, user.passwordHash))) return res.status(401).json({ message: 'Invalid email or password.' });

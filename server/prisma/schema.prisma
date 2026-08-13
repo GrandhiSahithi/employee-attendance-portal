@@ -39,22 +39,22 @@ model Department {
   id        String   @id @default(cuid())
   name      String   @unique
   users     User[]
-  teams     Team[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
+// A Team is owned by exactly one Manager/Head Manager (managerId), independent
+// of Department. Teams are created atomically with their manager (see
+// management.routes.js) so a team never exists without an owner, and are
+// deleted when that person is demoted back to Employee.
 model Team {
-  id           String     @id @default(cuid())
-  name         String
-  departmentId String
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  users        User[]
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  @@unique([departmentId, name])
-  @@index([departmentId])
+  id        String   @id @default(cuid())
+  name      String   @unique
+  managerId String?  @unique
+  manager   User?    @relation("TeamManagerOf", fields: [managerId], references: [id], onDelete: SetNull)
+  users     User[]   @relation("TeamMembers")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model User {
@@ -79,8 +79,16 @@ model User {
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
+  // The team this person belongs to. For a Manager/Head Manager this is
+  // always the same team they lead (see managedTeam below); for an Employee
+  // it is always derived from their supervisor's team, never set directly.
   teamId String?
-  team   Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  team   Team? @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+
+  // The team this person owns as its Manager/Head Manager, if any. Created
+  // atomically with the Manager/Head Manager account (or role promotion)
+  // and deleted when they are demoted back to Employee.
+  managedTeam Team? @relation("TeamManagerOf")
 
   supervisorId  String?
   supervisor    User?  @relation("SupervisorReports", fields: [supervisorId], references: [id], onDelete: SetNull)

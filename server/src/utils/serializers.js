@@ -29,6 +29,11 @@ export function publicUser(user) {
     departmentId: user.departmentId || null,
     team: user.team?.name || null,
     teamId: user.teamId || null,
+    // The team this person owns as its Manager/Head Manager (distinct from
+    // `team` above, which is just team membership). Null for Employees and
+    // for a Manager/Head Manager whose team hasn't been created yet.
+    leadsTeamId: user.managedTeam?.id || null,
+    leadsTeamName: user.managedTeam?.name || null,
     supervisorId: user.supervisorId || null,
     supervisorName: user.supervisor?.name || null,
     supervisorRole: user.supervisor?.role || null,

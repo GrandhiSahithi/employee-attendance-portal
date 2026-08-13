@@ -6,15 +6,33 @@ import { requireAuth, requireRoles } from '../middleware/auth.js';
 const router = Router();
 router.use(requireAuth);
 
+// Department is independent of the Manager<->Team relationship, so it is
+// just a flat picklist. Managers each own exactly one team, so a single
+// `managers` list (each carrying its teamId/teamName) is enough to drive a
+// bidirectional Manager<->Team picker on the client: selecting "by manager"
+// or "by team" both just set the same supervisorId.
 router.get('/options', async (_req, res) => {
-  const [departments, teams, heads, managers, employees] = await Promise.all([
+  const [departments, heads, managers] = await Promise.all([
     prisma.department.findMany({ orderBy: { name: 'asc' } }),
-    prisma.team.findMany({ include: { department: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({ where: { role: 'HEAD_MANAGER', isActive: true }, select: { id: true, name: true, employeeId: true }, orderBy: { name: 'asc' } }),
-    prisma.user.findMany({ where: { role: 'MANAGER', isActive: true }, select: { id: true, name: true, employeeId: true, supervisorId: true }, orderBy: { name: 'asc' } }),
-    prisma.user.findMany({ where: { role: 'EMPLOYEE', isActive: true }, select: { id: true, name: true, employeeId: true, supervisorId: true }, orderBy: { name: 'asc' } }),
+    prisma.user.findMany({
+      where: { role: 'MANAGER', isActive: true },
+      select: { id: true, name: true, employeeId: true, supervisorId: true, team: { select: { id: true, name: true } } },
+      orderBy: { name: 'asc' },
+    }),
   ]);
-  res.json({ departments, teams, heads, managers, employees });
+  res.json({
+    departments,
+    heads,
+    managers: managers.map((manager) => ({
+      id: manager.id,
+      name: manager.name,
+      employeeId: manager.employeeId,
+      supervisorId: manager.supervisorId,
+      teamId: manager.team?.id || null,
+      teamName: manager.team?.name || null,
+    })),
+  });
 });
 
 router.post('/departments', requireRoles('HEAD_MANAGER'), async (req, res) => {
@@ -29,15 +47,4 @@ router.post('/departments', requireRoles('HEAD_MANAGER'), async (req, res) => {
   }
 });
 
-router.post('/teams', requireRoles('HEAD_MANAGER'), async (req, res) => {
-  const parsed = z.object({ name: z.string().trim().min(2).max(80), departmentId: z.string().min(1) }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: 'Team name and department are required.' });
-  try {
-    const team = await prisma.team.create({ data: parsed.data, include: { department: true } });
-    res.status(201).json({ message: 'Team created.', team });
-  } catch (e) {
-    if (e?.code === 'P2002') return res.status(409).json({ message: 'That team already exists in this department.' });
-    throw e;
-  }
-});
 export default router;
