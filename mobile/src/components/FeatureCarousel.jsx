@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const AUTOPLAY_INTERVAL_MS = 5000;
@@ -21,8 +21,25 @@ export default function FeatureCarousel({ slides, colors }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef(null);
+  const wrapRef = useRef(null);
   const indexRef = useRef(0);
   const timerRef = useRef(null);
+
+  // On web (especially a static-exported/hydrated build), RN's onLayout can
+  // report a width that goes stale once the real responsive layout settles,
+  // leaving slides narrower than the card and exposing a gap. ResizeObserver
+  // tracks the true DOM box continuously; onLayout below covers native.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof ResizeObserver === 'undefined') return undefined;
+    const node = wrapRef.current;
+    if (!node) return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width;
+      if (width) setContainerWidth(width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const goTo = useCallback(
     (index, widthOverride) => {
@@ -47,6 +64,15 @@ export default function FeatureCarousel({ slides, colors }) {
     return () => clearInterval(timerRef.current);
   }, [restartAutoplay]);
 
+  // If the measured width changes after the scroll position was already set
+  // (e.g. a late layout pass on web/static export), the ScrollView's offset
+  // goes stale relative to the new slide width and exposes a gap between
+  // slides. Snap it back in sync, without animating, whenever width changes.
+  useEffect(() => {
+    if (!containerWidth) return;
+    scrollRef.current?.scrollTo({ x: indexRef.current * containerWidth, animated: false });
+  }, [containerWidth]);
+
   const onMomentumScrollEnd = (event) => {
     if (!containerWidth) return;
     const index = Math.round(event.nativeEvent.contentOffset.x / containerWidth);
@@ -61,7 +87,7 @@ export default function FeatureCarousel({ slides, colors }) {
   };
 
   return (
-    <View style={styles.wrap} onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}>
+    <View ref={wrapRef} style={styles.wrap} onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}>
       <View style={styles.cardWrap}>
         <View style={[styles.card, { height: IMAGE_HEIGHT }]}>
           {containerWidth > 0 && (
@@ -75,8 +101,15 @@ export default function FeatureCarousel({ slides, colors }) {
               onMomentumScrollEnd={onMomentumScrollEnd}
             >
               {slides.map((slide) => (
-                <View key={slide.title} style={{ width: containerWidth, height: IMAGE_HEIGHT }}>
-                  <Image source={slide.image} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                <View
+                  key={slide.title}
+                  style={{ width: containerWidth, height: IMAGE_HEIGHT, overflow: 'hidden', flexShrink: 0 }}
+                >
+                  <Image
+                    source={slide.image}
+                    style={{ position: 'absolute', top: 0, left: 0, width: containerWidth, height: IMAGE_HEIGHT }}
+                    resizeMode="cover"
+                  />
                   <View style={styles.slideContent}>
                     <View style={styles.badge}>
                       <Ionicons name={slide.icon} size={13} color="#fff" />
