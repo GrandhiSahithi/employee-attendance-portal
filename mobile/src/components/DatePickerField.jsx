@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { getHolidayMap } from '../utils/holidays';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -46,6 +47,9 @@ export default function DatePickerField({
   const fallback = selected || maximum || minimum || new Date();
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(new Date(fallback.getFullYear(), fallback.getMonth(), 1));
+  const [previewDate, setPreviewDate] = useState(null);
+
+  const holidayMap = useMemo(() => getHolidayMap(month.getFullYear() - 1, month.getFullYear() + 1), [month]);
 
   const days = useMemo(() => {
     const firstWeekday = month.getDay();
@@ -62,6 +66,7 @@ export default function DatePickerField({
     if (minimum && startOfDay(base) < minimum) base = minimum;
     if (maximum && startOfDay(base) > maximum) base = maximum;
     setMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+    setPreviewDate(value || null);
     setOpen(true);
   };
 
@@ -72,9 +77,16 @@ export default function DatePickerField({
 
   const choose = (date) => {
     if (!date || disabledDate(date)) return;
-    onChange(toDateString(date));
-    setOpen(false);
+    const dateString = toDateString(date);
+    onChange(dateString);
+    setPreviewDate(dateString);
+    // Non-holiday picks keep the existing snappy auto-close. A holiday pick
+    // stays open so its name shows below the grid, like tapping an event in
+    // Google Calendar, until the user explicitly closes.
+    if (!holidayMap[dateString]) setOpen(false);
   };
+
+  const previewHolidayName = previewDate ? holidayMap[previewDate] : null;
 
   const previousMonth = new Date(month.getFullYear(), month.getMonth() - 1, 1);
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
@@ -148,11 +160,13 @@ export default function DatePickerField({
                 const disabled = disabledDate(date);
                 const active = dateString === value;
                 const today = dateString === todayDateString();
+                const holidayName = holidayMap[dateString];
                 return (
                   <View key={dateString} style={styles.dayCell}>
                     <Pressable
                       disabled={disabled}
                       onPress={() => choose(date)}
+                      accessibilityLabel={holidayName ? `${dateString}, ${holidayName}` : dateString}
                       style={({ pressed }) => [
                         styles.dayButton,
                         active && { backgroundColor: colors.primary },
@@ -166,11 +180,23 @@ export default function DatePickerField({
                       }}>
                         {date.getDate()}
                       </Text>
+                      {!!holidayName && (
+                        <View style={[styles.holidayDot, { backgroundColor: active ? '#FFFFFF' : colors.rose }]} />
+                      )}
                     </Pressable>
                   </View>
                 );
               })}
             </View>
+
+            {!!previewHolidayName && (
+              <View style={[styles.holidayBanner, { backgroundColor: colors.roseSoft, borderColor: colors.rose }]}>
+                <Ionicons name="sparkles-outline" size={16} color={colors.rose} />
+                <Text style={{ color: colors.text, fontWeight: '800', flex: 1 }}>
+                  {previewDate === value ? 'Selected date is a public holiday: ' : ''}{previewHolidayName}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.modalFooter}>
               {!!constraintText && <Text style={[styles.hint, { color: colors.muted }]}>{constraintText}</Text>}
@@ -202,6 +228,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   dayCell: { width: '14.2857%', aspectRatio: 1, padding: 2 },
   dayButton: { flex: 1, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  holidayDot: { width: 5, height: 5, borderRadius: 3, marginTop: 3 },
+  holidayBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, padding: 10 },
   modalFooter: { marginTop: 4, gap: 10 },
   hint: { fontSize: 11, lineHeight: 17 },
   done: { minHeight: 42, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
