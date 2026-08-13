@@ -115,4 +115,41 @@ router.get('/me', async (req, res) => {
   res.json({ requests: requests.map(leaveDto) });
 });
 
+/**
+ * Team leave calendar: pending/approved leave for the viewer's own team
+ * only (not company-wide), so anyone can see who else is out before
+ * requesting their own dates. Defaults to a 2-month forward-looking window
+ * (current month + next) since that's what's useful for planning ahead.
+ */
+router.get('/team-calendar', async (req, res) => {
+  if (!req.user.teamId) {
+    return res.json({ requests: [], message: 'You are not assigned to a team yet.' });
+  }
+
+  let from;
+  let to;
+  if (req.query.from || req.query.to) {
+    from = parseDateOnly(req.query.from);
+    to = parseDateOnly(req.query.to);
+    if (!from || !to || from > to) return res.status(400).json({ message: 'Enter a valid date range.' });
+  } else {
+    const today = currentDateOnly();
+    from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 2, 0));
+  }
+
+  const requests = await prisma.leaveRequest.findMany({
+    where: {
+      status: { in: ['PENDING', 'APPROVED'] },
+      user: { teamId: req.user.teamId, isActive: true },
+      fromDate: { lte: to },
+      toDate: { gte: from },
+    },
+    include: { user: true },
+    orderBy: { fromDate: 'asc' },
+  });
+
+  res.json({ requests: requests.map(leaveDto), from, to, teamName: req.user.team?.name || null });
+});
+
 export default router;

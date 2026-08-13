@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import PDFDocument from 'pdfkit';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { requireAuth, requireRoles } from '../middleware/auth.js';
 import { currentDateOnly } from '../utils/date.js';
 import { leaveDto, publicUser } from '../utils/serializers.js';
+import { buildAnalytics, analyticsToCsv } from '../utils/analytics.js';
 
 const router = Router();
 router.use(requireAuth, requireRoles('MANAGER', 'HEAD_MANAGER'));
@@ -36,6 +38,8 @@ router.get('/team', async (req, res) => {
       team: true,
       supervisor: true,
       attendances: { where: { workDate: today }, take: 1 },
+      // "Who's in today" roster: leave takes priority over attendance status.
+      leaveRequests: { where: { status: 'APPROVED', fromDate: { lte: today }, toDate: { gte: today } }, take: 1 },
     },
     orderBy: [{ role: 'asc' }, { name: 'asc' }],
   });
@@ -43,12 +47,92 @@ router.get('/team', async (req, res) => {
   res.json({
     employees: employees.map((employee) => {
       const attendance = employee.attendances[0];
+      const onLeave = employee.leaveRequests[0];
       return {
         ...publicUser(employee),
-        todayAttendanceStatus: attendance?.checkOutTime ? 'CHECKED OUT' : attendance?.checkInTime ? 'CHECKED IN' : 'NOT CHECKED IN',
+        todayAttendanceStatus: onLeave
+          ? 'ON LEAVE'
+          : attendance?.checkOutTime ? 'CHECKED OUT' : attendance?.checkInTime ? 'CHECKED IN' : 'NOT CHECKED IN',
+        onLeaveType: onLeave?.leaveType || null,
       };
     }),
   });
+});
+
+function analyticsRange(req) {
+  return [7, 30, 90].includes(Number(req.query.range)) ? Number(req.query.range) : 30;
+}
+
+router.get('/analytics', async (req, res) => {
+  const analytics = await buildAnalytics(visibilityWhere(req.user), analyticsRange(req));
+  res.json(analytics);
+});
+
+router.get('/analytics/export', async (req, res) => {
+  const analytics = await buildAnalytics(visibilityWhere(req.user), analyticsRange(req));
+  const format = req.query.format === 'pdf' ? 'pdf' : 'csv';
+  const fromLabel = analytics.from.toISOString().slice(0, 10);
+  const toLabel = analytics.to.toISOString().slice(0, 10);
+  const filename = `attendance-analytics-${fromLabel}-to-${toLabel}`;
+
+  if (format === 'csv') {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
+    return res.send(analyticsToCsv(analytics));
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}.pdf"`);
+  const doc = new PDFDocument({ margin: 40, size: 'A4' });
+  doc.pipe(res);
+
+  doc.fontSize(16).fillColor('#111').text('Attendance & Leave Analytics');
+  doc.fontSize(10).fillColor('#555').text(
+    `${fromLabel} to ${toLabel} · ${analytics.workingDays} working day(s) · Generated ${new Date().toLocaleString()}`
+  );
+  doc.moveDown(1.2);
+
+  const columns = [
+    { key: 'name', label: 'Name', width: 115 },
+    { key: 'role', label: 'Role', width: 80 },
+    { key: 'presentDays', label: 'Present', width: 50 },
+    { key: 'attendancePercent', label: 'Attend %', width: 55 },
+    { key: 'punctualityPercent', label: 'Punct %', width: 55 },
+    { key: 'availableLeaveDays', label: 'Leave Bal', width: 60 },
+  ];
+  const startX = doc.x;
+  let y = doc.y;
+
+  const drawRow = (values, { bold = false, color = '#222' } = {}) => {
+    doc.fontSize(9).fillColor(color).font(bold ? 'Helvetica-Bold' : 'Helvetica');
+    columns.forEach((col, i) => {
+      const x = startX + columns.slice(0, i).reduce((sum, c) => sum + c.width, 0);
+      doc.text(String(values[i]), x, y, { width: col.width });
+    });
+  };
+
+  drawRow(columns.map((col) => col.label), { bold: true, color: '#111' });
+  y += 16;
+  doc.moveTo(startX, y).lineTo(startX + columns.reduce((sum, c) => sum + c.width, 0), y).strokeColor('#ccc').stroke();
+  y += 6;
+
+  for (const row of analytics.employees) {
+    if (y > 760) {
+      doc.addPage();
+      y = 40;
+    }
+    drawRow([
+      row.name,
+      row.role.replaceAll('_', ' '),
+      row.presentDays,
+      `${row.attendancePercent}%`,
+      row.punctualityPercent == null ? '—' : `${row.punctualityPercent}%`,
+      row.availableLeaveDays,
+    ]);
+    y += 16;
+  }
+
+  doc.end();
 });
 
 router.get('/users', requireRoles('HEAD_MANAGER'), async (_req, res) => {
@@ -70,7 +154,7 @@ const createUserSchema = z.object({
   departmentId: z.string().min(1),
   teamId: z.string().min(1),
   supervisorId: z.string().optional().nullable(),
-  availableLeaveDays: z.number().int().min(0).max(365).optional(),
+  availableLeaveDays: z.number().min(0).max(365).optional(),
   reportIds: z.array(z.string()).optional().default([]),
 });
 

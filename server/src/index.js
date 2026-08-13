@@ -33,6 +33,7 @@ import notificationsRoutes from './routes/notifications.routes.js';
 // Import error handling middleware
 import { errorHandler, notFound } from './middleware/error.js';
 import { startAutoCheckoutScheduler } from './jobs/autoCheckout.js';
+import { startLeaveAccrualScheduler } from './jobs/leaveAccrual.js';
 
 // Validate required environment variables
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is missing. Copy .env.example to .env and set a secret.');
@@ -97,3 +98,10 @@ app.listen(port, () => console.log(`Employee Portal API listening on http://loca
  * timezone if they never checked out manually. See src/jobs/autoCheckout.js.
  */
 startAutoCheckoutScheduler();
+
+/**
+ * Grants each active user their monthly leave accrual (replacing the old
+ * flat yearly balance), capped by a carryover limit. See
+ * src/jobs/leaveAccrual.js.
+ */
+startLeaveAccrualScheduler();

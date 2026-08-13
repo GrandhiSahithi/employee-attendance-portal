@@ -68,7 +68,12 @@ model User {
   profilePicture     String?
   role               Role     @default(EMPLOYEE)
   jobTitle           String?
-  availableLeaveDays Int      @default(20)
+  // Float (not Int): monthly accrual (see jobs/leaveAccrual.js) grants
+  // fractional days (e.g. 1.67/month) instead of a flat yearly amount.
+  availableLeaveDays Float    @default(20)
+  // Set by the monthly accrual job so it only grants once per calendar
+  // month even if the job runs more than once (e.g. server restart).
+  lastAccrualAt      DateTime?
   isActive           Boolean  @default(true)
 
   departmentId String?

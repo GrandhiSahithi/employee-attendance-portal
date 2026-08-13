@@ -18,12 +18,16 @@ import { prisma } from '../db.js';
  */
 export async function requireAuth(req, res, next) {
   try {
-    // Get Authorization header
+    // Get Authorization header. Falls back to a ?token= query param, only
+    // needed for the analytics CSV/PDF export links: those are opened via
+    // Linking.openURL (a plain URL, e.g. handed to the OS/browser to
+    // download), which can't attach a custom Authorization header.
     const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) return res.status(401).json({ message: 'Authentication required.' });
-    
+    const rawToken = header?.startsWith('Bearer ') ? header.slice(7) : req.query.token;
+    if (!rawToken) return res.status(401).json({ message: 'Authentication required.' });
+
     // Extract and verify token (Bearer <token>)
-    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET);
+    const payload = jwt.verify(rawToken, process.env.JWT_SECRET);
     
     // Get user from database using token's subject (user ID)
     const user = await prisma.user.findUnique({
