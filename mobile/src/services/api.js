@@ -8,8 +8,8 @@
  */
 
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { authStorage } from './authStorage';
 
 // Default API base URL (localhost for development)
 const defaultBase=Platform.OS==='web'?'http://localhost:4000/api':'http://localhost:4000/api';
@@ -26,10 +26,10 @@ export const api=axios.create({
 
 /**
  * Request interceptor
- * Automatically injects auth token from AsyncStorage into Authorization header
+ * Automatically injects auth token from storage into Authorization header
  */
 api.interceptors.request.use(async(config)=>{
-  const token=await AsyncStorage.getItem('authToken');
+  const token=await authStorage.getItem('authToken');
   if(token)config.headers.Authorization=`Bearer ${token}`;
   return config;
 });

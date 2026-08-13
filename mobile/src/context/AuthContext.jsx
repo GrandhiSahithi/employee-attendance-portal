@@ -3,15 +3,15 @@
  * ============================
  * Manages user authentication state and provides auth functions throughout the app.
  * Features:
- * - Persists auth token and user data in AsyncStorage
+ * - Persists auth token and user data via authStorage (sessionStorage on web, AsyncStorage on native)
  * - Auto-loads user session on app startup
  * - Provides login, signup, logout, and refreshUser functions
  * - Starts attendance sync listener on boot
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
+import { authStorage } from '../services/authStorage';
 import { startAttendanceSyncListener } from '../services/offlineAttendance';
 
 /**
@@ -31,7 +31,7 @@ export function AuthProvider({children}){
  
  /**
   * Initialize auth on app startup
-  * - Load saved token from AsyncStorage
+  * - Load saved token from storage
   * - Fetch current user data from API
   * - Start offline attendance sync listener
   */
@@ -41,7 +41,7 @@ export function AuthProvider({children}){
    (async()=>{
      try{
        // Try to get saved token from local storage
-       const token=await AsyncStorage.getItem('authToken');
+       const token=await authStorage.getItem('authToken');
        if(token){
          // If token exists, fetch current user
          const {data}=await api.get('/auth/me');
@@ -49,7 +49,7 @@ export function AuthProvider({children}){
        }
      }catch{
        // If error, clear auth storage (token expired)
-       await AsyncStorage.multiRemove(['authToken','authUser']);
+       await authStorage.multiRemove(['authToken','authUser']);
      }finally{
        if(alive)setBooting(false);
      }
@@ -63,8 +63,8 @@ export function AuthProvider({children}){
   * Persist auth data (token and user) to storage
   */
  const persist=async(data)=>{
-   await AsyncStorage.setItem('authToken',data.token);
-   await AsyncStorage.setItem('authUser',JSON.stringify(data.user));
+   await authStorage.setItem('authToken',data.token);
+   await authStorage.setItem('authUser',JSON.stringify(data.user));
    setUser(data.user);
    return data.user;
  };
@@ -88,7 +88,7 @@ export function AuthProvider({children}){
   * - Sets user to null
   */
  const logout=async()=>{
-   await AsyncStorage.multiRemove(['authToken','authUser']);
+   await authStorage.multiRemove(['authToken','authUser']);
    setUser(null);
  };
  
@@ -99,7 +99,7 @@ export function AuthProvider({children}){
  const refreshUser=async()=>{
    const {data}=await api.get('/auth/me');
    setUser(data.user);
-   await AsyncStorage.setItem('authUser',JSON.stringify(data.user));
+   await authStorage.setItem('authUser',JSON.stringify(data.user));
    return data.user;
  };
  
