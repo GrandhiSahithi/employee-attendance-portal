@@ -19,9 +19,37 @@ import Screen from '../src/components/Screen';
 import FormField from '../src/components/FormField';
 import AppButton from '../src/components/AppButton';
 import MessageBox from '../src/components/MessageBox';
+import FeatureCarousel from '../src/components/FeatureCarousel';
 import { useAuth } from '../src/context/AuthContext';
 import { useTheme } from '../src/context/ThemeContext';
 import { getApiError } from '../src/services/api';
+
+const FEATURE_SLIDES = [
+  {
+    image: require('../assets/illustrations/gps.png'),
+    title: 'GPS Attendance',
+    description: 'Check in and out with your live location captured automatically, down to the minute.',
+    tint: '#557C6B',
+  },
+  {
+    image: require('../assets/illustrations/leave.png'),
+    title: 'Leave Calendar',
+    description: 'Request time off, track approvals, and see your balance at a glance.',
+    tint: '#D9A5B3',
+  },
+  {
+    image: require('../assets/illustrations/team.png'),
+    title: 'Team Hierarchy',
+    description: 'Departments, teams, and supervisors organized the way your company actually works.',
+    tint: '#A99BC7',
+  },
+  {
+    image: require('../assets/illustrations/secure.png'),
+    title: 'Secure Accounts',
+    description: 'Email verification, OTP recovery, and role-based access keep every account protected.',
+    tint: '#D5B36C',
+  },
+];
 
 /**
  * Login Component
@@ -87,18 +115,8 @@ export default function Login() {
           <Text style={[styles.eyebrow, { color: colors.primary }]}>EMPLOYEE ATTENDANCE & LEAVE</Text>
           <Text style={[styles.heroTitle, { color: colors.text }]}>One elegant portal for the entire workday.</Text>
           <Text style={[styles.heroText, { color: colors.muted }]}>GPS attendance, leave approvals, calendars, organization hierarchy, profile management, notifications, offline sync, and secure account recovery.</Text>
-          <View style={styles.tiles}>
-            {[
-              ['location-outline', 'GPS Attendance', colors.primarySoft, colors.primary],
-              ['calendar-outline', 'Leave Calendar', colors.roseSoft, colors.rose],
-              ['git-network-outline', 'Team Hierarchy', colors.lilacSoft, colors.lilac],
-              ['shield-checkmark-outline', 'Secure Accounts', colors.goldSoft, colors.gold],
-            ].map(([icon, title, background, color]) => (
-              <View key={title} style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.tileIcon, { backgroundColor: background }]}><Ionicons name={icon} size={21} color={color} /></View>
-                <Text style={{ color: colors.text, fontWeight: '900' }}>{title}</Text>
-              </View>
-            ))}
+          <View style={[styles.carouselCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <FeatureCarousel slides={FEATURE_SLIDES} colors={colors} />
           </View>
         </View>
 
@@ -167,15 +185,9 @@ const styles = StyleSheet.create({
   // Description text under hero title
   heroText: { fontSize: 15, lineHeight: 24, marginTop: 12, maxWidth: 600 },
   
-  // Grid of feature tiles (GPS, Leave, Team Hierarchy, Secure Accounts)
-  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 11, marginTop: 24 },
-  
-  // Individual feature tile - 47% width with icon and label
-  tile: { width: '47%', minWidth: 180, borderWidth: 1, borderRadius: 16, padding: 14, gap: 9 },
-  
-  // Icon container inside each tile - colored background
-  tileIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  
+  // Animated feature slideshow card (replaces the old static tile grid)
+  carouselCard: { borderWidth: 1, borderRadius: 20, padding: 20, marginTop: 24 },
+
   // Login card (right side) - contains email/password form
   card: { flex: 0.8, borderWidth: 1, borderRadius: 26, padding: 24, gap: 15, justifyContent: 'center' },
   
