@@ -28,6 +28,9 @@ function Admin() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [deptName, setDeptName] = useState('');
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamEmployeeId, setNewTeamEmployeeId] = useState('');
+  const [newTeamHeadId, setNewTeamHeadId] = useState('');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(() => new Set());
   const [selectedId, setSelectedId] = useState(null);
@@ -141,6 +144,35 @@ function Admin() {
     } catch (e) { setError(await getApiError(e)); }
   };
 
+  const promotableEmployees = useMemo(() => users.filter((user) => user.role === 'EMPLOYEE' && user.isActive), [users]);
+
+  // A new Team always needs a real person leading it (every team has exactly
+  // one Manager), so creating a standalone team here promotes an existing
+  // Employee into that Manager role and gives them the new team - the same
+  // atomic create-team-with-its-manager operation used elsewhere, just
+  // started from an existing account instead of a brand-new one.
+  const createTeam = async () => {
+    setError(''); setMessage('');
+    if (!newTeamName.trim()) return setError('Enter a team name.');
+    if (!newTeamEmployeeId) return setError('Choose who will lead this team.');
+    if (!newTeamHeadId) return setError('Choose the Head Manager this new Manager reports to.');
+    setSaving(true);
+    try {
+      const { data } = await api.patch(`/management/users/${newTeamEmployeeId}/role`, {
+        role: 'MANAGER',
+        supervisorId: newTeamHeadId,
+        newTeamName: newTeamName.trim(),
+      });
+      setMessage(`${data.user.name} now leads the new team "${data.user.leadsTeamName}".`);
+      setNewTeamName(''); setNewTeamEmployeeId(''); setNewTeamHeadId('');
+      await load();
+    } catch (e) {
+      setError(await getApiError(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const toggleExpanded = (id) => setExpanded((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -237,16 +269,37 @@ function Admin() {
       )}
 
       {tab === 'structure' && (
-        <View style={styles.two}>
-          <View style={[styles.card, styles.structure, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>New Department</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Departments are independent of Manager/Team - creating one doesn't affect any reporting relationship.</Text>
-            <FormField label="Department Name" value={deptName} onChangeText={setDeptName} placeholder="Engineering" />
-            <AppButton title="Create Department" onPress={createDept} />
+        <View style={{ gap: 12 }}>
+          <View style={styles.two}>
+            <View style={[styles.card, styles.structure, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>New Department</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Departments are independent of Manager/Team - create as many as you like. They never restrict, or get restricted by, who leads which team.</Text>
+              <FormField label="Department Name" value={deptName} onChangeText={setDeptName} placeholder="Engineering" />
+              <AppButton title="Create Department" onPress={createDept} />
+            </View>
+
+            <View style={[styles.card, styles.structure, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>New Team</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Every team needs exactly one Manager leading it, so creating a team here promotes an existing Employee into that role. To start a team led by a brand-new account instead, use Create Account.</Text>
+              <FormField label="Team Name" value={newTeamName} onChangeText={setNewTeamName} placeholder="e.g. North" />
+              <Label text="Who will lead this team?" colors={colors} />
+              {promotableEmployees.length === 0 ? (
+                <Text style={{ color: colors.muted, fontSize: 12 }}>No Employees available to promote right now.</Text>
+              ) : (
+                <View style={styles.choices}>
+                  {promotableEmployees.map((employee) => (
+                    <Choice key={employee.id} label={`${employee.name} (${employee.department || 'no dept'})`} active={newTeamEmployeeId === employee.id} onPress={() => setNewTeamEmployeeId(employee.id)} colors={colors} />
+                  ))}
+                </View>
+              )}
+              <Label text="Reports to Head Manager" colors={colors} />
+              <View style={styles.choices}>{options.heads.map((head) => <Choice key={head.id} label={head.name} active={newTeamHeadId === head.id} onPress={() => setNewTeamHeadId(head.id)} colors={colors} />)}</View>
+              <AppButton title="Create Team" loading={saving} onPress={createTeam} />
+            </View>
           </View>
-          <View style={[styles.card, styles.structure, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Teams</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Every team is led by exactly one Manager or Head Manager. New teams are created together with a new Manager/Head Manager account, or when promoting someone into that role - see Create Account and People & Roles.</Text>
+
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Existing Teams</Text>
             <View style={{ gap: 8 }}>
               {managers.map((manager) => (
                 <View key={manager.id} style={[styles.teamRow, { borderColor: colors.border }]}>
