@@ -105,7 +105,11 @@ function Attendance() {
         <View style={styles.rows}>
           <Row label="Check-In Time" value={record?.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '—'} colors={colors} />
           <Row label="Check-In GPS (Latitude, Longitude)" value={gps(record?.checkInLatitude, record?.checkInLongitude)} colors={colors} mono />
-          <Row label="Check-Out Time" value={record?.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString() : '—'} colors={colors} />
+          <Row
+            label="Check-Out Time"
+            value={record?.checkOutTime ? `${new Date(record.checkOutTime).toLocaleTimeString()}${record.checkoutType === 'AUTOMATIC' ? ' (Auto)' : ''}` : '—'}
+            colors={colors}
+          />
           <Row label="Check-Out GPS (Latitude, Longitude)" value={gps(record?.checkOutLatitude, record?.checkOutLongitude)} colors={colors} mono />
         </View>
 

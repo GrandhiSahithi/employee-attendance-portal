@@ -153,7 +153,12 @@ function History() {
 
           <View style={styles.detailGrid}>
             <Detail label="Check-In Time" value={record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '—'} colors={colors} icon="log-in-outline" />
-            <Detail label="Check-Out Time" value={record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString() : '—'} colors={colors} icon="log-out-outline" />
+            <Detail
+              label="Check-Out Time"
+              value={record.checkOutTime ? `${new Date(record.checkOutTime).toLocaleTimeString()}${record.checkoutType === 'AUTOMATIC' ? ' (Auto)' : ''}` : '—'}
+              colors={colors}
+              icon="log-out-outline"
+            />
             <Detail label="Check-In GPS" value={coordinate(record.checkInLatitude, record.checkInLongitude)} colors={colors} icon="location-outline" />
             <Detail label="Check-Out GPS" value={coordinate(record.checkOutLatitude, record.checkOutLongitude)} colors={colors} icon="navigate-outline" />
           </View>

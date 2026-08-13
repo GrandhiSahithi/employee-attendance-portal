@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { requireAuth, requireRoles } from '../middleware/auth.js';
 import { currentDateOnly, dateOnlyFromCapturedAt, parseDateOnly, subtractDays } from '../utils/date.js';
+import { resolveTimezoneFromCoordinates } from '../utils/timezone.js';
 import { attendanceDto } from '../utils/serializers.js';
 
 const router = Router();
@@ -40,6 +41,8 @@ router.post('/check-in', async (req, res) => {
   const checkInTime = parsed.data.capturedAt ? new Date(parsed.data.capturedAt) : new Date();
   if (!workDate || Number.isNaN(checkInTime.getTime())) return res.status(400).json({ message: 'Invalid attendance date/time.' });
 
+  const checkInTimezone = resolveTimezoneFromCoordinates(parsed.data.latitude, parsed.data.longitude);
+
   try {
     const attendance = await prisma.attendance.create({
       data: {
@@ -48,6 +51,7 @@ router.post('/check-in', async (req, res) => {
         checkInTime,
         checkInLatitude: parsed.data.latitude,
         checkInLongitude: parsed.data.longitude,
+        checkInTimezone,
       },
     });
     res.status(201).json({ message: 'Check-in recorded successfully.', attendance: attendanceDto(attendance) });
@@ -74,15 +78,21 @@ router.post('/check-out', async (req, res) => {
   if (existing.checkOutTime) return res.status(409).json({ message: 'You have already checked out for this date.' });
   if (checkOutTime < existing.checkInTime) return res.status(400).json({ message: 'Check-out time cannot be before check-in time.' });
 
-  const attendance = await prisma.attendance.update({
-    where: { id: existing.id },
+  // Conditional update guards against a race with the automatic-checkout
+  // sweep: if that already closed the record, this affects 0 rows instead
+  // of overwriting it.
+  const result = await prisma.attendance.updateMany({
+    where: { id: existing.id, checkOutTime: null },
     data: {
       checkOutTime,
       checkOutLatitude: parsed.data.latitude,
       checkOutLongitude: parsed.data.longitude,
+      checkoutType: 'MANUAL',
     },
   });
+  if (result.count === 0) return res.status(409).json({ message: 'You have already checked out for this date.' });
 
+  const attendance = await prisma.attendance.findUnique({ where: { id: existing.id } });
   res.json({ message: 'Check-out recorded successfully.', attendance: attendanceDto(attendance) });
 });
 

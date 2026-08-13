@@ -32,6 +32,7 @@ import notificationsRoutes from './routes/notifications.routes.js';
 
 // Import error handling middleware
 import { errorHandler, notFound } from './middleware/error.js';
+import { startAutoCheckoutScheduler } from './jobs/autoCheckout.js';
 
 // Validate required environment variables
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is missing. Copy .env.example to .env and set a secret.');
@@ -90,3 +91,9 @@ app.use(errorHandler);       // Handle all errors
  * Listen on configured port
  */
 app.listen(port, () => console.log(`Employee Portal API listening on http://localhost:${port}`));
+
+/**
+ * Automatically checks out employees at 5:00 PM in their check-in
+ * timezone if they never checked out manually. See src/jobs/autoCheckout.js.
+ */
+startAutoCheckoutScheduler();

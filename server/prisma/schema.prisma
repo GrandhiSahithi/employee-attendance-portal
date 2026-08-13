@@ -30,6 +30,11 @@ enum OtpPurpose {
   PASSWORD_RESET
 }
 
+enum CheckoutType {
+  MANUAL
+  AUTOMATIC
+}
+
 model Department {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -103,11 +108,16 @@ model Attendance {
   checkInLongitude Float
   checkOutLatitude Float?
   checkOutLongitude Float?
+  // IANA timezone (e.g. "America/Los_Angeles") resolved from checkInLatitude/checkInLongitude.
+  // Drives the 5pm local-time automatic checkout cutoff; independent of server/viewer timezone.
+  checkInTimezone  String?
+  checkoutType     CheckoutType?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   @@unique([userId, workDate])
   @@index([userId, workDate])
+  @@index([checkOutTime])
 }
 
 model LeaveRequest {
