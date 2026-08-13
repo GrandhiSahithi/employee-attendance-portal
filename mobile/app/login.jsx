@@ -26,28 +26,32 @@ import { getApiError } from '../src/services/api';
 
 const FEATURE_SLIDES = [
   {
-    image: require('../assets/illustrations/gps.png'),
-    title: 'GPS Attendance',
-    description: 'Check in and out with your live location captured automatically, down to the minute.',
-    tint: '#557C6B',
+    image: require('../assets/illustrations/hero-gps.png'),
+    icon: 'location',
+    badge: 'GPS Attendance',
+    title: 'Check in from anywhere',
+    description: 'Your live location is captured automatically the moment you check in or out.',
   },
   {
-    image: require('../assets/illustrations/leave.png'),
-    title: 'Leave Calendar',
-    description: 'Request time off, track approvals, and see your balance at a glance.',
-    tint: '#D9A5B3',
+    image: require('../assets/illustrations/hero-leave.png'),
+    icon: 'calendar',
+    badge: 'Leave Calendar',
+    title: 'Plan time off with ease',
+    description: 'Request leave, track approvals, and see your remaining balance at a glance.',
   },
   {
-    image: require('../assets/illustrations/team.png'),
-    title: 'Team Hierarchy',
+    image: require('../assets/illustrations/hero-team.png'),
+    icon: 'git-network',
+    badge: 'Team Hierarchy',
+    title: 'See how your team connects',
     description: 'Departments, teams, and supervisors organized the way your company actually works.',
-    tint: '#A99BC7',
   },
   {
-    image: require('../assets/illustrations/secure.png'),
-    title: 'Secure Accounts',
-    description: 'Email verification, OTP recovery, and role-based access keep every account protected.',
-    tint: '#D5B36C',
+    image: require('../assets/illustrations/hero-secure.png'),
+    icon: 'shield-checkmark',
+    badge: 'Secure Accounts',
+    title: 'Your account, fully protected',
+    description: 'Email verification, OTP recovery, and role-based access on every login.',
   },
 ];
 
@@ -115,9 +119,7 @@ export default function Login() {
           <Text style={[styles.eyebrow, { color: colors.primary }]}>EMPLOYEE ATTENDANCE & LEAVE</Text>
           <Text style={[styles.heroTitle, { color: colors.text }]}>One elegant portal for the entire workday.</Text>
           <Text style={[styles.heroText, { color: colors.muted }]}>GPS attendance, leave approvals, calendars, organization hierarchy, profile management, notifications, offline sync, and secure account recovery.</Text>
-          <View style={[styles.carouselCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <FeatureCarousel slides={FEATURE_SLIDES} colors={colors} />
-          </View>
+          <FeatureCarousel slides={FEATURE_SLIDES} colors={colors} />
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -185,9 +187,6 @@ const styles = StyleSheet.create({
   // Description text under hero title
   heroText: { fontSize: 15, lineHeight: 24, marginTop: 12, maxWidth: 600 },
   
-  // Animated feature slideshow card (replaces the old static tile grid)
-  carouselCard: { borderWidth: 1, borderRadius: 20, padding: 20, marginTop: 24 },
-
   // Login card (right side) - contains email/password form
   card: { flex: 0.8, borderWidth: 1, borderRadius: 26, padding: 24, gap: 15, justifyContent: 'center' },
   
