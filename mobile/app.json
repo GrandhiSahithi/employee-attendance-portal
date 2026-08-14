@@ -32,7 +32,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#1D4ED8"
+          "backgroundColor": "#33473D"
         }
       ]
     ],
@@ -49,7 +49,7 @@
       "package": "com.sahithi18181.employeeattendanceportal",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1D4ED8"
+        "backgroundColor": "#33473D"
       }
     },
     "ios": {
