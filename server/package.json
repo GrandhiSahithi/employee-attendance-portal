@@ -24,8 +24,8 @@
     "luxon": "^3.7.2",
     "multer": "^2.0.2",
     "node-cron": "^4.6.0",
-    "nodemailer": "^7.0.6",
     "pdfkit": "^0.19.1",
+    "resend": "^6.20.0",
     "tz-lookup": "^6.1.25",
     "zod": "^4.0.17"
   },

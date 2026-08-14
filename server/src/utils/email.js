@@ -1,27 +1,20 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-function smtpConfigured() {
-  return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+function emailConfigured() {
+  return Boolean(process.env.RESEND_API_KEY);
 }
 
-function transporter() {
-  if (!smtpConfigured()) return null;
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    family: 4,
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  });
+let client = null;
+function resendClient() {
+  if (!emailConfigured()) return null;
+  if (!client) client = new Resend(process.env.RESEND_API_KEY);
+  return client;
 }
 
 export async function sendOtpEmail({ to, code, purpose }) {
-  const client = transporter();
-  if (!client) {
-    const error = new Error('Gmail OTP is not configured on the server. Add GMAIL_USER and GMAIL_APP_PASSWORD to server/.env.');
+  const resend = resendClient();
+  if (!resend) {
+    const error = new Error('Email delivery is not configured on the server. Add RESEND_API_KEY to server/.env.');
     error.code = 'EMAIL_NOT_CONFIGURED';
     throw error;
   }
@@ -29,9 +22,10 @@ export async function sendOtpEmail({ to, code, purpose }) {
   const isSignup = purpose === 'SIGNUP';
   const subject = isSignup ? 'Verify your Dev Portal email' : 'Reset your Dev Portal password';
   const action = isSignup ? 'finish creating your employee portal account' : 'reset your employee portal password';
+  const from = process.env.RESEND_FROM || 'Dev Employee Portal <onboarding@resend.dev>';
 
-  await client.sendMail({
-    from: `Dev Employee Portal <${process.env.GMAIL_USER}>`,
+  const { error } = await resend.emails.send({
+    from,
     to,
     subject,
     text: `Your Dev Employee Portal verification code is ${code}. Use it within 10 minutes to ${action}. If you did not request this, ignore this email.`,
@@ -45,4 +39,10 @@ export async function sendOtpEmail({ to, code, purpose }) {
       </div>
     `,
   });
+
+  if (error) {
+    const err = new Error(error.message || 'Failed to send verification email.');
+    err.code = 'EMAIL_SEND_FAILED';
+    throw err;
+  }
 }
