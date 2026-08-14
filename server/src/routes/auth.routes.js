@@ -292,6 +292,7 @@ const resetPasswordSchema = z.object({
   email: z.string().email(),
   newPassword: z.string().min(8),
   employeeId: z.string().trim().optional().nullable(),
+  otp: z.string().trim().optional().nullable(),
 });
 
 /**
