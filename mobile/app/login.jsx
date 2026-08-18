@@ -53,6 +53,27 @@ const FEATURE_SLIDES = [
     title: 'Your account, fully protected',
     description: 'Email verification, OTP recovery, and role-based access on every login.',
   },
+  {
+    image: require('../assets/illustrations/hero-roster.png'),
+    icon: 'pulse',
+    badge: 'Live Roster',
+    title: "Know who's in, live",
+    description: "Managers see who's checked in, on leave, or running late — updated in real time.",
+  },
+  {
+    image: require('../assets/illustrations/hero-analytics.png'),
+    icon: 'bar-chart',
+    badge: 'Analytics & Reports',
+    title: 'Insights that matter',
+    description: 'Attendance percentage, punctuality trends, and leave balances — exportable for payroll.',
+  },
+  {
+    image: require('../assets/illustrations/hero-notifications.png'),
+    icon: 'notifications',
+    badge: 'Instant Alerts',
+    title: 'Never miss an update',
+    description: 'Leave approvals, reminders, and announcements delivered the moment they happen.',
+  },
 ];
 
 /**
