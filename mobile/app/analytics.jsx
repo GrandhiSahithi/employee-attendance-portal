@@ -1,3 +1,14 @@
+/**
+ * Analytics Screen
+ * ================
+ * Manager/Head Manager dashboard showing attendance %, punctuality, and
+ * leave balance status for the people assigned to the signed-in manager.
+ * - Lets the manager pick a date range (7/30/90 days)
+ * - Shows summary cards (team average attendance, working days, low
+ *   leave balances, headcount) plus a per-employee metrics list
+ * - Supports exporting the current range as CSV or PDF
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,10 +35,12 @@ const LEAVE_STATUS_META = {
   HIGH: { label: 'High / underused', color: 'gold' },
 };
 
+// Route-guarded entry point: only Managers and Head Managers may view this screen.
 export default function AnalyticsScreen() {
   return <RequireAuth roles={['MANAGER', 'HEAD_MANAGER']}><Analytics /></RequireAuth>;
 }
 
+// Main Analytics screen: range picker, summary cards, export buttons, and per-employee metrics.
 function Analytics() {
   const { colors } = useTheme();
   const [range, setRange] = useState(30);
@@ -57,6 +70,7 @@ function Analytics() {
   // popup-blocked instead of opening the download.
   useEffect(() => { authStorage.getItem('authToken').then(setToken); }, []);
 
+  // Opens a browser/download link for the CSV or PDF export of the current date range.
   const exportReport = (format) => {
     setExporting(format);
     setError('');
@@ -134,6 +148,7 @@ function Analytics() {
   );
 }
 
+// Small tinted stat card used in the summary row (icon + value + label).
 function SummaryCard({ colors, icon, label, value, tint }) {
   return (
     <View style={[styles.summaryCard, { backgroundColor: colors[`${tint}Soft`], borderColor: colors.border }]}>

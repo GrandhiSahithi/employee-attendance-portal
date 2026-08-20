@@ -1,3 +1,14 @@
+/**
+ * DatePickerField Component
+ * =========================
+ * A labeled text input + calendar-icon button that opens a modal month
+ * calendar for picking a date. Supports min/max date constraints, marks
+ * US federal holidays on the grid (see src/utils/holidays.js), and shows
+ * the holiday name when a marked day is previewed/selected.
+ * Also exports date-string helpers (toDateString, fromDateString,
+ * todayDateString) used by several screens for "YYYY-MM-DD" handling.
+ */
+
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,10 +21,12 @@ function pad(value) {
   return String(value).padStart(2, '0');
 }
 
+// Formats a Date as a "YYYY-MM-DD" string.
 export function toDateString(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+// Parses a "YYYY-MM-DD" string into a Date, or null if invalid/malformed.
 export function fromDateString(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
   const [year, month, day] = value.split('-').map(Number);
@@ -25,10 +38,12 @@ function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// Returns today's date as a "YYYY-MM-DD" string.
 export function todayDateString() {
   return toDateString(new Date());
 }
 
+// Main DatePickerField component: text input + calendar-icon button that opens the modal month picker.
 export default function DatePickerField({
   label,
   value,
@@ -61,6 +76,8 @@ export default function DatePickerField({
     return cells;
   }, [month]);
 
+  // Opens the calendar modal, jumping to the month containing the current
+  // selection (clamped to the min/max range) so the right dates are visible.
   const openCalendar = () => {
     let base = selected || new Date();
     if (minimum && startOfDay(base) < minimum) base = minimum;
@@ -70,11 +87,15 @@ export default function DatePickerField({
     setOpen(true);
   };
 
+  // Returns true if a given date falls outside the allowed min/max range.
   const disabledDate = (date) => {
     const normalized = startOfDay(date);
     return Boolean((minimum && normalized < minimum) || (maximum && normalized > maximum));
   };
 
+  // Selects a date (if not disabled), notifies the parent via onChange, and
+  // closes the modal — unless the picked date is a holiday, in which case
+  // it stays open so the holiday name can be shown.
   const choose = (date) => {
     if (!date || disabledDate(date)) return;
     const dateString = toDateString(date);

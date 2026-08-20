@@ -1,3 +1,12 @@
+/**
+ * Team Leave Calendar Screen
+ * ==========================
+ * Month-view calendar showing who is on approved/pending leave on each
+ * day. Scope depends on the signed-in user's role: their own team, or
+ * (for Head Managers) the whole organization. Tapping a day shows the
+ * list of people out that day.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,10 +28,12 @@ function toDateString(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+// Route-guarded entry point: any authenticated role may view this screen.
 export default function TeamCalendarScreen() {
   return <RequireAuth><TeamCalendar /></RequireAuth>;
 }
 
+// Main Team Calendar screen: month navigation, calendar grid with leave markers, and a selected-day detail panel.
 function TeamCalendar() {
   const { colors } = useTheme();
   const [month, setMonth] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
@@ -64,6 +75,7 @@ function TeamCalendar() {
     return cells;
   }, [month]);
 
+  // Returns the leave requests that cover the given date.
   const whoIsOut = useCallback((dateString) => {
     return requests.filter((request) => dateString >= request.fromDate?.slice(0, 10) && dateString <= request.toDate?.slice(0, 10));
   }, [requests]);

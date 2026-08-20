@@ -1,3 +1,11 @@
+/**
+ * FeatureCarousel Component
+ * =========================
+ * Full-bleed, auto-advancing hero slideshow used on the login screen to
+ * showcase app features. See the more detailed comment on the component
+ * below for rendering/behavior details.
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +49,7 @@ export default function FeatureCarousel({ slides, colors }) {
     return () => observer.disconnect();
   }, []);
 
+  // Scrolls to the slide at `index` (wrapping around), updating active state.
   const goTo = useCallback(
     (index, widthOverride) => {
       const width = widthOverride || containerWidth;
@@ -53,6 +62,7 @@ export default function FeatureCarousel({ slides, colors }) {
     [containerWidth, slides.length]
   );
 
+  // Clears and restarts the auto-advance timer (called on mount and after any manual/auto slide change).
   const restartAutoplay = useCallback(() => {
     clearInterval(timerRef.current);
     if (!containerWidth) return;
@@ -73,6 +83,7 @@ export default function FeatureCarousel({ slides, colors }) {
     scrollRef.current?.scrollTo({ x: indexRef.current * containerWidth, animated: false });
   }, [containerWidth]);
 
+  // Syncs active-slide state after the user manually swipes/scrolls, and restarts autoplay.
   const onMomentumScrollEnd = (event) => {
     if (!containerWidth) return;
     const index = Math.round(event.nativeEvent.contentOffset.x / containerWidth);
@@ -81,6 +92,7 @@ export default function FeatureCarousel({ slides, colors }) {
     restartAutoplay();
   };
 
+  // Handles arrow/dot navigation taps: jumps to a slide and restarts autoplay.
   const manualGoTo = (index) => {
     goTo(index);
     restartAutoplay();

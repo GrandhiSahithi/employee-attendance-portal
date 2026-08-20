@@ -1,3 +1,11 @@
+/**
+ * Attendance History Screen
+ * =========================
+ * Lets the signed-in user review their past attendance records: check-in
+ * and check-out times, total working hours, and captured GPS coordinates.
+ * Supports quick range filters (last 7/30 days) and a custom date range.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,21 +18,25 @@ import MessageBox from '../src/components/MessageBox';
 import { useTheme } from '../src/context/ThemeContext';
 import { api, getApiError } from '../src/services/api';
 
+// Returns the date string for N days before today.
 function daysAgoString(days) {
   const date = new Date();
   date.setDate(date.getDate() - days);
   return toDateString(date);
 }
 
+// Formats a latitude/longitude pair for display, or '—' if not captured.
 function coordinate(latitude, longitude) {
   if (latitude == null || longitude == null) return '—';
   return `${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`;
 }
 
+// Route-guarded entry point: any authenticated role may view this screen.
 export default function HistoryScreen() {
   return <RequireAuth roles={['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER']}><History /></RequireAuth>;
 }
 
+// Main History screen: range chips, optional custom-range picker, and the record list.
 function History() {
   const { colors } = useTheme();
   const today = todayDateString();
@@ -50,6 +62,7 @@ function History() {
 
   useEffect(() => { load('7'); }, []);
 
+  // Updates the custom range's "from" date, pushing "to" forward if it would now precede "from".
   const setFrom = (value) => {
     setCustom((current) => ({
       ...current,
@@ -168,6 +181,7 @@ function History() {
   );
 }
 
+// Renders one labeled detail chip inside a history record card (e.g. Check-In GPS).
 function Detail({ label, value, colors, icon }) {
   return (
     <View style={[styles.detail, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>

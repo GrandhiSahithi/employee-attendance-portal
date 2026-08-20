@@ -1,3 +1,11 @@
+/**
+ * Forgot Password Screen
+ * ======================
+ * Lets a user request and complete a password reset, branching between
+ * @dev.com (Employee ID confirmation) and @gmail.com (OTP email) flows
+ * based on the email they enter.
+ */
+
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +18,7 @@ import MessageBox from '../src/components/MessageBox';
 import { useTheme } from '../src/context/ThemeContext';
 import { api, getApiError } from '../src/services/api';
 
+// Classifies an email as a DEV (@dev.com), GMAIL (@gmail.com), or OTHER address.
 function emailType(email) {
   const value = email.trim().toLowerCase();
   if (value.endsWith('@dev.com')) return 'DEV';
@@ -17,6 +26,7 @@ function emailType(email) {
   return 'OTHER';
 }
 
+// Main Forgot Password screen component.
 export default function ForgotPassword() {
   const { colors } = useTheme();
   const [email, setEmail] = useState('');
@@ -28,6 +38,8 @@ export default function ForgotPassword() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  // Requests a password reset for the entered email; server responds with
+  // which flow to use (DEV or GMAIL), stored in `mode`.
   const request = async () => {
     setError(''); setMessage('');
     const type = emailType(email);
@@ -44,6 +56,8 @@ export default function ForgotPassword() {
     }
   };
 
+  // Validates and submits the new password along with the Employee ID
+  // (DEV mode) or OTP (GMAIL mode), then redirects to login on success.
   const reset = async () => {
     setError(''); setMessage('');
     if (newPassword.length < 8) return setError('New password must contain at least 8 characters.');

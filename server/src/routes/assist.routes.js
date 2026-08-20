@@ -1,3 +1,12 @@
+/**
+ * Writing Assistant Routes
+ * ========================
+ * Rephrases an employee's leave-request reason into more professional
+ * wording. Tries a local Ollama LLM first (if OLLAMA_URL is configured),
+ * and falls back to a no-cost, built-in rule-based rewrite so the feature
+ * still works offline / without any AI service running.
+ */
+
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
@@ -6,6 +15,15 @@ const router = Router();
 router.use(requireAuth);
 const schema = z.object({ text: z.string().trim().min(2).max(1000), leaveType: z.string().optional() });
 
+/**
+ * Built-in fallback rewrite: applies a small set of canned phrase
+ * replacements, capitalizes/punctuates the result, and prefixes an
+ * "I would like to request ... leave because ..." framing if the text
+ * doesn't already start like a request.
+ * @param {string} text - Raw reason text from the employee
+ * @param {string} [leaveType] - Leave type, used in the fallback framing sentence
+ * @returns {string} Rewritten reason
+ */
 function localRephrase(text, leaveType) {
   let s = text.trim().replace(/\s+/g, ' ');
   const replacements = [
@@ -25,6 +43,13 @@ function localRephrase(text, leaveType) {
   return s;
 }
 
+/**
+ * Attempt to rephrase text using a local Ollama LLM instance.
+ * @param {string} text - Raw reason text from the employee
+ * @param {string} [leaveType] - Leave type, included in the prompt for context
+ * @returns {Promise<string|null>} Rewritten reason, or null if OLLAMA_URL isn't configured
+ * @throws {Error} if OLLAMA_URL is set but the request fails
+ */
 async function ollamaRephrase(text, leaveType) {
   const base = process.env.OLLAMA_URL;
   if (!base) return null;
@@ -40,6 +65,11 @@ async function ollamaRephrase(text, leaveType) {
   return String(data.response || '').trim() || null;
 }
 
+/**
+ * POST /rephrase
+ * Rephrase a leave reason. Tries the local LLM first, falls back to the
+ * built-in rewrite if no LLM is configured or the LLM call fails.
+ */
 router.post('/rephrase', async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Enter a reason to rephrase.' });

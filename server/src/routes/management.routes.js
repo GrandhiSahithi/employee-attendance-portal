@@ -1,3 +1,17 @@
+/**
+ * Management Routes
+ * =================
+ * Manager/Head Manager only routes for administering the organization:
+ * - Team roster with today's attendance/leave status
+ * - Attendance & leave analytics, including CSV/PDF export
+ * - Creating users, reassigning supervisors/departments, changing roles,
+ *   activating/deactivating accounts (Head Manager only)
+ * - Reviewing (approving/rejecting) pending leave requests
+ *
+ * All routes require MANAGER or HEAD_MANAGER; several are further
+ * restricted to HEAD_MANAGER only via requireRoles on the individual route.
+ */
+
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import PDFDocument from 'pdfkit';
@@ -12,11 +26,28 @@ import { buildAnalytics, analyticsToCsv } from '../utils/analytics.js';
 const router = Router();
 router.use(requireAuth, requireRoles('MANAGER', 'HEAD_MANAGER'));
 
+/**
+ * Prisma where-clause scoping which users the requesting manager can see:
+ * a Head Manager sees everyone (except themselves), a Manager sees only
+ * their own direct reports.
+ * @param {object} user - The requesting user (req.user)
+ * @returns {object} Prisma where-clause
+ */
 function visibilityWhere(user) {
   if (user.role === 'HEAD_MANAGER') return { isActive: true, id: { not: user.id } };
   return { isActive: true, supervisorId: user.id };
 }
 
+/**
+ * Validate and load the proposed supervisor for a user of the given role,
+ * enforcing the reporting hierarchy: Manager must report to a Head
+ * Manager, Employee must report to a Manager, Head Manager has none.
+ * @param {string} role - Target role ('EMPLOYEE'|'MANAGER'|'HEAD_MANAGER')
+ * @param {string} supervisorId - Proposed supervisor's user id
+ * @param {string|null} targetId - The user being assigned (to block self-supervision)
+ * @returns {Promise<object|null>} The supervisor user, or null for HEAD_MANAGER
+ * @throws {Error} with a user-facing message if the supervisor is invalid
+ */
 async function validateSupervisorForRole(role, supervisorId, targetId = null) {
   if (role === 'HEAD_MANAGER') return null;
   if (!supervisorId) throw new Error(role === 'MANAGER' ? 'Select a Head Manager.' : 'Select a Manager.');
@@ -29,6 +60,12 @@ async function validateSupervisorForRole(role, supervisorId, targetId = null) {
   return supervisor;
 }
 
+/**
+ * GET /team
+ * Return the roster of employees visible to the requesting manager
+ * (see visibilityWhere), each annotated with today's attendance status
+ * ("ON LEAVE" takes priority over check-in/check-out state).
+ */
 router.get('/team', async (req, res) => {
   const today = currentDateOnly();
   const employees = await prisma.user.findMany({
@@ -59,15 +96,31 @@ router.get('/team', async (req, res) => {
   });
 });
 
+/**
+ * Parse and validate the ?range= query param (allowed: 7, 30, 90 days),
+ * defaulting to 30.
+ * @param {object} req - Express request
+ * @returns {number}
+ */
 function analyticsRange(req) {
   return [7, 30, 90].includes(Number(req.query.range)) ? Number(req.query.range) : 30;
 }
 
+/**
+ * GET /analytics
+ * Return attendance/leave analytics (see utils/analytics.js) for the users
+ * visible to the requesting manager, over the requested range.
+ */
 router.get('/analytics', async (req, res) => {
   const analytics = await buildAnalytics(visibilityWhere(req.user), analyticsRange(req));
   res.json(analytics);
 });
 
+/**
+ * GET /analytics/export
+ * Export the same analytics as a downloadable CSV (?format=csv, default)
+ * or a hand-drawn PDF table (?format=pdf) using pdfkit.
+ */
 router.get('/analytics/export', async (req, res) => {
   const analytics = await buildAnalytics(visibilityWhere(req.user), analyticsRange(req));
   const format = req.query.format === 'pdf' ? 'pdf' : 'csv';
@@ -135,6 +188,10 @@ router.get('/analytics/export', async (req, res) => {
   doc.end();
 });
 
+/**
+ * GET /users
+ * Return every user in the organization (active and inactive). Head Manager only.
+ */
 router.get('/users', requireRoles('HEAD_MANAGER'), async (_req, res) => {
   const users = await prisma.user.findMany({
     include: { department: true, team: true, managedTeam: true, supervisor: true },
@@ -165,6 +222,14 @@ const createUserSchema = z.object({
   reportIds: z.array(z.string()).optional().default([]),
 });
 
+/**
+ * POST /users
+ * Create a new user account (Head Manager only, @dev.com email required).
+ * For a MANAGER/HEAD_MANAGER, also creates the team they'll lead, and
+ * optionally reassigns existing users (reportIds) to report to them, all
+ * inside one transaction. See the createUserSchema comments above for how
+ * supervisor/team is derived per role.
+ */
 router.post('/users', requireRoles('HEAD_MANAGER'), async (req, res) => {
   const parsed = createUserSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues?.[0]?.message || 'Enter valid user details.' });
@@ -251,6 +316,12 @@ const assignmentSchema = z.object({
   jobTitle: z.string().trim().min(2).max(100),
 });
 
+/**
+ * PATCH /users/:id/assignment
+ * Reassign a user's department, job title, and (for non-Head-Managers)
+ * supervisor. Head Manager only. Team is never accepted directly from the
+ * client - for an Employee it's re-derived from the chosen Manager.
+ */
 router.patch('/users/:id/assignment', requireRoles('HEAD_MANAGER'), async (req, res) => {
   const parsed = assignmentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Department and job title are required.' });
@@ -294,6 +365,14 @@ const roleSchema = z.object({
   newTeamName: optionalTeamName,
 });
 
+/**
+ * PATCH /users/:id/role
+ * Change a user's role (Head Manager only). Enforces several invariants:
+ * at least one active Head Manager must remain; a demoted Manager/Head
+ * Manager can't have existing direct reports of the wrong shape; promoting
+ * into a manager-type role creates a new team if the user doesn't already
+ * own one; demoting away from a manager-type role deletes the team they led.
+ */
 router.patch('/users/:id/role', requireRoles('HEAD_MANAGER'), async (req, res) => {
   const parsed = roleSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Choose a valid role.' });
@@ -373,6 +452,12 @@ router.patch('/users/:id/role', requireRoles('HEAD_MANAGER'), async (req, res) =
   }
 });
 
+/**
+ * PATCH /users/:id/status
+ * Activate or deactivate a user account. Head Manager only. A Head
+ * Manager cannot deactivate their own account, and the last active Head
+ * Manager can't be deactivated.
+ */
 router.patch('/users/:id/status', requireRoles('HEAD_MANAGER'), async (req, res) => {
   const parsed = z.object({ isActive: z.boolean() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'isActive must be true or false.' });
@@ -393,6 +478,13 @@ router.patch('/users/:id/status', requireRoles('HEAD_MANAGER'), async (req, res)
   res.json({ message: parsed.data.isActive ? 'Account activated.' : 'Account deactivated.', user: publicUser(user) });
 });
 
+/**
+ * GET /leaves/pending
+ * Return pending leave requests awaiting review by the current manager:
+ * a Manager sees their direct-report Employees; a Head Manager sees
+ * Managers reporting to them, Employees under those Managers, and other
+ * Head Managers (peer review).
+ */
 router.get('/leaves/pending', async (req, res) => {
   let ownerWhere;
 
@@ -418,6 +510,15 @@ router.get('/leaves/pending', async (req, res) => {
   res.json({ requests: requests.map(leaveDto) });
 });
 
+/**
+ * PATCH /leaves/:id
+ * Approve or reject a pending leave request. Determines who is authorized
+ * to review it based on the requester's role and reporting chain, and
+ * notifies other eligible approvers that the (single, first) decision has
+ * already been made. Approving decrements the requester's leave balance.
+ * Uses a conditional update (claim) so only the first reviewer's decision
+ * sticks if two approvers act concurrently.
+ */
 router.patch('/leaves/:id', async (req, res) => {
   const parsed = z.object({ status: z.enum(['APPROVED', 'REJECTED']) }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Status must be APPROVED or REJECTED.' });

@@ -88,6 +88,7 @@ export default function Login() {
   // Get window width to determine responsive layout (wide = 880px or more)
   const { width } = useWindowDimensions();
   const wide = width >= 880;
+  if (typeof window !== 'undefined') { window.__renderLog = window.__renderLog || []; window.__renderLog.push({ width, wide, t: Date.now() }); }
   
   // State management for form fields
   const [email, setEmail] = useState('');
@@ -135,7 +136,7 @@ export default function Login() {
         </Pressable>
       </View>
 
-      <View style={[styles.layout, wide && styles.wide]}>
+      <View testID="login-layout-row" style={wide ? { gap: 20, flexDirection: 'row', alignItems: 'stretch' } : { gap: 20, flexDirection: 'column' }}>
         <View style={[styles.hero, { backgroundColor: colors.primarySoft, borderColor: colors.border }]}>
           <Text style={[styles.eyebrow, { color: colors.primary }]}>EMPLOYEE ATTENDANCE & LEAVE</Text>
           <Text style={[styles.heroTitle, { color: colors.text }]}>One elegant portal for the entire workday.</Text>
@@ -189,12 +190,6 @@ const styles = StyleSheet.create({
   
   // Theme toggle button - shows "Light/Dark mode" with icon
   theme: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  
-  // Main layout container
-  layout: { gap: 20 },
-  
-  // Wide layout (desktop) - displays hero and card side by side
-  wide: { flexDirection: 'row', alignItems: 'stretch' },
   
   // Hero section - shows features (left side on desktop)
   hero: { flex: 1.2, borderWidth: 1, borderRadius: 26, padding: 30, justifyContent: 'center' },

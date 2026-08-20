@@ -1,3 +1,11 @@
+/**
+ * Profile Screen
+ * ==============
+ * Shows the signed-in user's work profile (name, employee ID, role, job
+ * title, department, team, supervisor, contact info) and lets them edit
+ * their name/phone number or upload a new profile picture.
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,10 +21,12 @@ import { useTheme } from '../src/context/ThemeContext';
 import { api, getApiError } from '../src/services/api';
 import { useAuth } from '../src/context/AuthContext';
 
+// Route-guarded entry point: any authenticated role may view this screen.
 export default function ProfileScreen() {
   return <RequireAuth><Profile /></RequireAuth>;
 }
 
+// Main Profile screen: avatar/details header, read-only info list, and an editable name/phone form.
 function Profile() {
   const { colors } = useTheme();
   const { refreshUser } = useAuth();
@@ -42,12 +52,14 @@ function Profile() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Discards edits and reverts the form to the last loaded profile values.
   const cancelEdit = () => {
     setForm({ name: profile?.name || '', phone: profile?.phone || '' });
     setEditing(false);
     setError('');
   };
 
+  // Saves the edited name/phone, refreshes the shared auth user, and exits edit mode.
   const save = async () => {
     setSaving(true);
     setError('');
@@ -66,6 +78,7 @@ function Profile() {
     }
   };
 
+  // Opens the device image picker, then uploads the chosen image as the new profile picture.
   const photo = async () => {
     setError('');
     setMessage('');
@@ -156,6 +169,7 @@ function Profile() {
   );
 }
 
+// Renders one read-only labeled row in the profile info section.
 function Info({ label, value, colors, icon }) {
   return (
     <View style={[styles.info, { borderBottomColor: colors.border }]}>

@@ -1,3 +1,11 @@
+/**
+ * Apply for Leave Screen
+ * ======================
+ * Lets any signed-in user submit a leave request (Casual/Sick/Vacation)
+ * with a date range and reason, optionally rephrasing the reason with an
+ * AI writing assistant, and shows their 5 most recent requests with status.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,10 +22,12 @@ import { useAuth } from '../src/context/AuthContext';
 
 const TYPES = ['CASUAL', 'SICK', 'VACATION'];
 
+// Route-guarded entry point: any authenticated role may view this screen.
 export default function LeaveScreen() {
   return <RequireAuth><Leave /></RequireAuth>;
 }
 
+// Main Leave screen: leave type picker, date range, reason field with AI rephrase, and recent requests list.
 function Leave() {
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -35,6 +45,7 @@ function Leave() {
   useEffect(() => { load(); }, [load]);
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  // Updates the "from" date, pushing "to" forward if it would now precede "from".
   const setFromDate = (value) => setForm((current) => ({
     ...current,
     fromDate: value,
@@ -47,6 +58,8 @@ function Leave() {
     return 'Suggestion: Keep your reason clear and professional. One or two sentences are usually enough.';
   }, [form.leaveType]);
 
+  // Sends the current reason text to the AI rephrase endpoint and replaces
+  // it with a more concise, professional version.
   const rephrase = async () => {
     setError('');
     setMessage('');
@@ -61,6 +74,7 @@ function Leave() {
     } finally { setRephrasing(false); }
   };
 
+  // Validates the leave request form and submits it, then resets the form and reloads recent requests.
   const submit = async () => {
     setError('');
     setMessage('');

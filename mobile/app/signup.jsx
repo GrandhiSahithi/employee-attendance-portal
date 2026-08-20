@@ -1,3 +1,13 @@
+/**
+ * Signup Screen
+ * =============
+ * Lets a new user create their own account (@dev.com or @gmail.com).
+ * Branches between two flows based on whether the org has any accounts
+ * yet: the very first account becomes Head Manager and creates the first
+ * department/team; every account after that joins as an Employee picking
+ * an existing department and Manager.
+ */
+
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,10 +22,11 @@ import { useTheme } from '../src/context/ThemeContext';
 import { api, getApiError } from '../src/services/api';
 
 const EMPTY = {
-  name: '', employeeId: '', email: '', password: 'password-123', phone: '',
+  name: '', employeeId: '', email: '', password: '', retypePassword: '', phone: '',
   jobTitle: '', departmentId: '', supervisorId: '', departmentName: '', teamName: '',
 };
 
+// Classifies an email as a DEV (@dev.com), GMAIL (@gmail.com), or OTHER address.
 function domainType(email) {
   const value = email.trim().toLowerCase();
   if (value.endsWith('@dev.com')) return 'DEV';
@@ -23,6 +34,7 @@ function domainType(email) {
   return 'OTHER';
 }
 
+// Main Signup screen: intro panel plus the account-creation form.
 export default function Signup() {
   const { signup } = useAuth();
   const { colors, mode, toggleTheme } = useTheme();
@@ -54,16 +66,30 @@ export default function Signup() {
   const managers = options?.managers || [];
   const selectedManager = managers.find((manager) => manager.id === form.supervisorId) || null;
   const emailType = domainType(form.email);
+  const passwordCheck = {
+    length: form.password.length >= 8,
+    uppercase: /[A-Z]/.test(form.password),
+    lowercase: /[a-z]/.test(form.password),
+    number: /[0-9]/.test(form.password),
+    special: /[^A-Za-z0-9]/.test(form.password),
+  };
+  const passwordValid = Object.values(passwordCheck).every(Boolean);
+  const passwordsMatch = form.retypePassword.length > 0 && form.password === form.retypePassword;
 
   const changeEmail = (value) => {
     setForm((current) => ({ ...current, email: value.toLowerCase() }));
     setMessage('');
   };
 
+  // Validates the signup form (fields differ for the first-account vs.
+  // normal-employee flow) and submits it, then signs the new user in.
   const submit = async () => {
     setError(''); setMessage('');
     if (emailType === 'OTHER') return setError('Use either a @dev.com company email or a @gmail.com email.');
-    if (form.password.length < 8) return setError('Password must contain at least 8 characters.');
+    if (!passwordValid){
+      return setError('Password must be at least 8 characters and include at least one lowercase letter, one uppercase letter, one number, and one special character.');
+    }
+    if(!passwordsMatch) return setError('Passwords do not match.');
     if (!form.name.trim() || !form.employeeId.trim() || !form.jobTitle.trim()) return setError('Name, employee ID, and job title are required.');
 
     if (options?.needsSetup) {
@@ -127,6 +153,25 @@ export default function Signup() {
           <FormField label="Email" value={form.email} onChangeText={changeEmail} autoCapitalize="none" keyboardType="email-address" placeholder="name@dev.com or name@gmail.com" />
 
           <FormField label="Password" value={form.password} onChangeText={(value) => update('password', value)} secureTextEntry placeholder="Minimum 8 characters" />
+          <View style={[styles.requirements, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <Requirement met={passwordCheck.length} label="At least 8 characters" colors={colors} />
+            <Requirement met={passwordCheck.uppercase} label="One uppercase letter" colors={colors} />
+            <Requirement met={passwordCheck.lowercase} label="One lowercase letter" colors={colors} />
+            <Requirement met={passwordCheck.number} label="One number" colors={colors} />
+            <Requirement met={passwordCheck.special} label="One special character" colors={colors} />
+          </View>
+
+          <FormField
+            label="Retype Password"
+            value={form.retypePassword}
+            onChangeText={(value) => update('retypePassword', value)}
+            secureTextEntry
+            placeholder="Re-enter your password"
+          />
+          {!!form.retypePassword && (
+            <Requirement met={passwordsMatch} label="Passwords match" colors={colors} />
+          )}
+
           <View style={styles.two}>
             <FormField style={styles.field} label="Phone" value={form.phone} onChangeText={(value) => update('phone', value)} keyboardType="phone-pad" placeholder="Optional" />
             <FormField style={styles.field} label="Job Title" value={form.jobTitle} onChangeText={(value) => update('jobTitle', value)} placeholder="Software Engineer" />
@@ -175,6 +220,15 @@ function Label({ text, colors }) {
   return <Text style={[styles.label, { color: colors.text }]}>{text}</Text>;
 }
 
+function Requirement({ met, label, colors }) {
+  return (
+    <View style={styles.requirement}>
+      <Ionicons name={met ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={met ? colors.success : colors.muted} />
+      <Text style={{ color: met ? colors.success : colors.muted, fontSize: 13, fontWeight: met ? '800' : '600' }}>{label}</Text>
+    </View>
+  );
+}
+
 function Choice({ label, active, onPress, colors }) {
   return (
     <Pressable onPress={onPress} style={[styles.choice, { backgroundColor: active ? colors.primarySoft : colors.surfaceAlt, borderColor: active ? colors.primary : colors.border }]}>
@@ -201,6 +255,8 @@ const styles = StyleSheet.create({
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   choice: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 8 },
   roleBanner: { borderWidth: 1, borderRadius: 14, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  requirements: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 7 },
+  requirement: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   otpBox: { borderWidth: 1, borderRadius: 16, padding: 13, gap: 10 },
   otpHeading: { flexDirection: 'row', alignItems: 'center', gap: 7 },
 });

@@ -1,3 +1,12 @@
+/**
+ * Attendance Screen
+ * =================
+ * Lets the signed-in user check in/check out for the day, capturing GPS
+ * coordinates with each action. Works offline: if there's no network when
+ * marking attendance, the action is queued locally and synced automatically
+ * once connectivity returns (see src/services/offlineAttendance.js).
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,11 +22,13 @@ import { useTheme } from '../src/context/ThemeContext';
 import { api, getApiError } from '../src/services/api';
 import { queueAttendanceAction, syncQueuedAttendance } from '../src/services/offlineAttendance';
 
+// Formats a latitude/longitude pair for display, or '—' if not captured.
 function gps(latitude, longitude) {
   if (latitude == null || longitude == null) return '—';
   return `${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`;
 }
 
+// Route-guarded entry point: any authenticated role may view this screen.
 export default function AttendanceScreen() {
   return (
     <RequireAuth roles={['EMPLOYEE', 'MANAGER', 'HEAD_MANAGER']}>
@@ -26,6 +37,7 @@ export default function AttendanceScreen() {
   );
 }
 
+// Main Attendance screen: today's status card plus Check In / Check Out buttons.
 function Attendance() {
   const { colors } = useTheme();
   const [record, setRecord] = useState(null);
@@ -48,6 +60,9 @@ function Attendance() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Captures the device's current GPS location and records a check-in or
+  // check-out. Queues the action offline via offlineAttendance if there's
+  // no network, otherwise posts it immediately and triggers a sync.
   const mark = async (type) => {
     setError('');
     setMessage('');
@@ -144,6 +159,7 @@ function Attendance() {
   );
 }
 
+// Renders one labeled value row inside the status card (e.g. Check-In Time).
 function Row({ label, value, colors, mono = false }) {
   return (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>

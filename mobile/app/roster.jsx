@@ -1,3 +1,11 @@
+/**
+ * Roster Screen ("Who's In Today")
+ * =================================
+ * Manager/Head Manager screen showing a live roster of everyone assigned
+ * to them today: checked in, checked out, on leave, or not checked in yet,
+ * plus summary counts per status.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +18,7 @@ import LoadingView from '../src/components/LoadingView';
 import { useTheme } from '../src/context/ThemeContext';
 import { api, getApiError } from '../src/services/api';
 
+// Icon and tint color per today's-attendance-status value.
 const STATUS_META = {
   'CHECKED IN': { icon: 'checkmark-circle', color: 'primary' },
   'CHECKED OUT': { icon: 'log-out-outline', color: 'lilac' },
@@ -17,10 +26,12 @@ const STATUS_META = {
   'NOT CHECKED IN': { icon: 'alert-circle-outline', color: 'rose' },
 };
 
+// Route-guarded entry point: only Managers and Head Managers may view this screen.
 export default function RosterScreen() {
   return <RequireAuth roles={['MANAGER', 'HEAD_MANAGER']}><Roster /></RequireAuth>;
 }
 
+// Main Roster screen: status summary counts plus a per-employee live status list.
 function Roster() {
   const { colors } = useTheme();
   const [employees, setEmployees] = useState([]);

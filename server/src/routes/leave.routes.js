@@ -1,3 +1,15 @@
+/**
+ * Leave Request Routes
+ * ====================
+ * Handles employee-initiated leave requests:
+ * - Submitting a new leave request (with approver notification)
+ * - Viewing the current user's own leave request history
+ * - Viewing the team (or, for a Head Manager, org-wide) leave calendar
+ *
+ * Approval/rejection of these requests happens in management.routes.js,
+ * not here.
+ */
+
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
@@ -15,6 +27,14 @@ const leaveSchema = z.object({
   reason: z.string().trim().min(1, 'Reason is mandatory.').max(1000),
 });
 
+/**
+ * Determine who should be notified when this user submits a leave request:
+ * - Employee: their Manager, plus that Manager's Head Manager
+ * - Manager: their Head Manager
+ * - Head Manager: all other active Head Managers (peer review)
+ * @param {object} user - The requesting user (req.user)
+ * @returns {Promise<string[]>} User IDs to notify
+ */
 async function approvalRecipients(user) {
   const ids = new Set();
 
@@ -39,12 +59,26 @@ async function approvalRecipients(user) {
   return [...ids];
 }
 
+/**
+ * Build the human-readable confirmation message describing who was (or
+ * wasn't) notified about a new leave request, based on the requester's role.
+ * @param {object} user - The requesting user
+ * @param {number} count - Number of recipients notified
+ * @returns {string}
+ */
 function recipientMessage(user, count) {
   if (user.role === 'EMPLOYEE') return count ? 'Your Manager and Head Manager were notified.' : 'No approver is currently assigned to your account.';
   if (user.role === 'MANAGER') return count ? 'Your Head Manager was notified.' : 'No Head Manager is currently assigned to your account.';
   return count ? 'Other active Head Managers were notified.' : 'No other active Head Manager is available to review your leave request.';
 }
 
+/**
+ * POST /
+ * Submit a new leave request. Validates dates (no past dates, from <= to),
+ * checks the requester has enough leave balance, rejects overlapping
+ * pending/approved requests, then creates the request and notifies the
+ * appropriate approver(s) via approvalRecipients().
+ */
 router.post('/', async (req, res) => {
   const parsed = leaveSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues?.[0]?.message || 'Invalid leave request.' });
@@ -106,6 +140,10 @@ router.post('/', async (req, res) => {
   });
 });
 
+/**
+ * GET /me
+ * Return all of the current user's own leave requests, newest first.
+ */
 router.get('/me', async (req, res) => {
   const requests = await prisma.leaveRequest.findMany({
     where: { userId: req.user.id },

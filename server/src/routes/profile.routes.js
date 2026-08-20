@@ -1,3 +1,12 @@
+/**
+ * Profile Routes
+ * ==============
+ * Lets the current user view and edit their own profile:
+ * - Fetching their profile
+ * - Updating name/phone
+ * - Uploading a profile photo
+ */
+
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db.js';
@@ -15,10 +24,18 @@ const profileSchema = z.object({
   ]),
 });
 
+/**
+ * GET /
+ * Return the current user's own profile.
+ */
 router.get('/', requireAuth, async (req, res) => {
   res.json({ profile: publicUser(req.user) });
 });
 
+/**
+ * PUT /
+ * Update the current user's name and/or phone number.
+ */
 router.put('/', requireAuth, async (req, res) => {
   const parsed = profileSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues?.[0]?.message || 'Enter valid profile details.' });
@@ -45,6 +62,11 @@ router.put('/', requireAuth, async (req, res) => {
   res.json({ message: 'Profile updated successfully.', profile: publicUser(user) });
 });
 
+/**
+ * POST /photo
+ * Upload/replace the current user's profile photo. See middleware/upload.js
+ * for storage config (size limit, image-only filter).
+ */
 router.post('/photo', requireAuth, profilePhotoUpload.single('photo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'Select an image to upload.' });
 

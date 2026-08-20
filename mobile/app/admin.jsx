@@ -1,3 +1,16 @@
+/**
+ * Admin Screen
+ * ============
+ * Organization Administration screen, restricted to Head Managers.
+ * Lets a Head Manager:
+ * - Create new company (@dev.com) accounts with a role, department, and
+ *   manager/team assignment
+ * - Browse/search all people, change a person's role and reporting
+ *   assignment, and activate/deactivate accounts
+ * - Create new Departments and new Teams (promoting an existing Employee
+ *   into the Manager role that leads the new team)
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,10 +30,12 @@ const EMPTY = {
 
 const isManagerRole = (role) => role === 'MANAGER' || role === 'HEAD_MANAGER';
 
+// Route-guarded entry point: only Head Managers may view this screen.
 export default function AdminScreen() {
   return <RequireAuth roles={['HEAD_MANAGER']}><Admin /></RequireAuth>;
 }
 
+// Main Admin screen: tabs between People & Roles, Create Account, and Departments.
 function Admin() {
   const { colors } = useTheme();
   const [tab, setTab] = useState('people');
@@ -59,6 +74,8 @@ function Admin() {
   const changeRole = (role) => setForm((current) => ({ ...current, role, supervisorId: '', newTeamName: '' }));
   const selectedFormManager = options.managers.find((manager) => manager.id === form.supervisorId) || null;
 
+  // Opens the inline "manage" panel for a given user, seeding the edit
+  // form with their current role/assignment.
   const openManage = (user) => {
     setSelectedId(user.id);
     setEdit({
@@ -76,6 +93,7 @@ function Admin() {
   const editNeedsNewTeam = !!edit && isManagerRole(edit.role) && !managingUser?.leadsTeamId;
   const editSelectedManager = options.managers.find((manager) => manager.id === edit?.supervisorId) || null;
 
+  // Validates and submits the "Create Account" form to add a new company user.
   const createUser = async () => {
     setError(''); setMessage('');
     if (!form.email.trim().toLowerCase().endsWith('@dev.com')) return setError('Head-created accounts use @dev.com. Gmail users must use public Sign Up and verify their OTP.');
@@ -96,6 +114,7 @@ function Admin() {
     }
   };
 
+  // Validates and submits the edit panel's role + reporting-assignment changes for the selected user.
   const saveManagedUser = async () => {
     if (!selectedId || !edit || !managingUser) return;
     setSaving(true); setError(''); setMessage('');
@@ -125,6 +144,7 @@ function Admin() {
     }
   };
 
+  // Flips a user's active/inactive (deactivated) status.
   const toggleStatus = async (user) => {
     setError(''); setMessage('');
     try {
@@ -136,6 +156,7 @@ function Admin() {
     }
   };
 
+  // Creates a new Department from the "New Department" form.
   const createDept = async () => {
     setError(''); setMessage('');
     try {
@@ -173,6 +194,7 @@ function Admin() {
     }
   };
 
+  // Expands/collapses a manager's list of direct reports in the People & Roles tree.
   const toggleExpanded = (id) => setExpanded((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -451,6 +473,8 @@ function Admin() {
   );
 }
 
+// Renders one person's row (used for search results) with their role badge,
+// status, and an inline manage panel when selected.
 function PersonCard({ user, colors, contextLine, selected, edit, onManage, onToggleStatus, onCancel, onSave, saving, setEdit, options, editNeedsNewTeam, editSelectedManager }) {
   return (
     <View style={[styles.person, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -494,6 +518,8 @@ function PersonCard({ user, colors, contextLine, selected, edit, onManage, onTog
   );
 }
 
+// Inline form for changing a selected user's role, department, and
+// manager/team assignment.
 function ManagePanel({ colors, edit, setEdit, options, editNeedsNewTeam, editSelectedManager, onSave, onCancel, saving }) {
   const changeRole = (role) => setEdit((current) => ({ ...current, role, supervisorId: '', newTeamName: '' }));
   return (
